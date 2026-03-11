@@ -23,25 +23,26 @@ import { Landing } from './pages/Landing';
 import { NewOrderFlow } from './pages/NewOrderFlow';
 import { RewardsCatalog } from './pages/RewardsCatalog';
 import { TicketsSystem } from './pages/TicketsSystem';
-import { AuthCallback } from './components/AuthCallback';
+import { CompleteProfile } from './pages/CompleteProfile';
 import { Toaster } from 'react-hot-toast';
 
 function App() {
-  const { dbUser } = useAuth();
-  return (
-    <>
-      <Toaster position="top-right" />
-      <Routes>
-        {/* Rutas Públicas */}
-        <Route element={<PublicRoute />}>
-          <Route path="/" element={<Landing />} />
-          {/* Callback handling */}
-          <Route path="/auth/callback" element={<AuthCallback />} />
-        </Route>
+    const { dbUser } = useAuth();
+    return (
+        <>
+            <Toaster position="top-right" />
+            <Routes>
+                {/* Rutas Públicas */}
+                <Route element={<PublicRoute />}>
+                    <Route path="/" element={<Landing />} />
+                    {/* Callback handling */}
+                    <Route path="/auth/callback" element={<AuthCallback />} />
+                </Route>
 
-        {/* Rutas Protegidas (Requieren Sesión) */}
-        <Route element={<ProtectedRoute />}>
-          <Route element={<MainLayout />}>
+                {/* Rutas Protegidas (Requieren Sesión) */}
+                <Route element={<ProtectedRoute />}>
+                    <Route path="/complete-profile" element={<CompleteProfile />} />
+                    <Route element={<MainLayout />}>
             {/* Index redirige/renderiza según el ROL (Local, Admin, Client) */}
             <Route path="/dashboard" element={<DashboardIndex />} />
 

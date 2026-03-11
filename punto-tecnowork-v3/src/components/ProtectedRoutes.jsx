@@ -2,7 +2,7 @@ import { Outlet, Navigate } from 'react-router';
 import { useAuth } from '../context/AuthContext';
 
 export const ProtectedRoute = () => {
-    const { user, loading } = useAuth();
+    const { user, loading, isProfileComplete } = useAuth();
 
     if (loading) {
         return (
@@ -14,6 +14,11 @@ export const ProtectedRoute = () => {
 
     if (!user) {
         return <Navigate to="/" replace />;
+    }
+
+    // Redirect to onboarding if profile is incomplete and we're not already there
+    if (!isProfileComplete() && window.location.pathname !== '/complete-profile') {
+        return <Navigate to="/complete-profile" replace />;
     }
 
     return <Outlet />;

@@ -61,11 +61,16 @@ export const AdminBranding = () => {
 
         try {
             toast.loading("Subiendo logo...", { id: 'upload' });
-            const res = await storage.createFile(import.meta.env.VITE_STORAGE_BUCKET_ID || 'branding', ID.unique(), file);
+            const bucketId = import.meta.env.VITE_STORAGE_BUCKET_ID || 'branding';
+            const res = await storage.createFile(bucketId, ID.unique(), file);
             setConfig({ ...config, [type]: res.$id });
             toast.success("Logo subido correctamente", { id: 'upload' });
         } catch (error) {
-            toast.error("Error al subir imagen", { id: 'upload' });
+            console.error("Upload error:", error);
+            const message = error.code === 404 
+                ? "El bucket 'branding' no existe en Appwrite. Por favor, créalo o revisa el panel de Mantenimiento."
+                : "Error al subir imagen. Verifica los permisos.";
+            toast.error(message, { id: 'upload', duration: 5000 });
         }
     };
 

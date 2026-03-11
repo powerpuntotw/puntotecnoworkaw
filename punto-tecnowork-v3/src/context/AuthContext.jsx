@@ -121,10 +121,35 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
+    const updateProfile = async (data) => {
+        try {
+            const updated = await databases.updateDocument(
+                import.meta.env.VITE_APPWRITE_DATABASE_ID,
+                'users',
+                dbUser.$id,
+                data
+            );
+            setDbUser(updated);
+            toast.success('Perfil actualizado correctamente');
+            return updated;
+        } catch (error) {
+            console.error('Profile update failed:', error);
+            toast.error('Error al actualizar el perfil');
+            throw error;
+        }
+    };
+
+    const isProfileComplete = () => {
+        if (!dbUser) return false;
+        return !!(dbUser.full_name && dbUser.email && dbUser.phone);
+    };
+
     const value = {
         user,
         dbUser,
         loading,
+        isProfileComplete,
+        updateProfile,
         loginWithGoogle,
         loginWithEmail,
         registerWithEmail,

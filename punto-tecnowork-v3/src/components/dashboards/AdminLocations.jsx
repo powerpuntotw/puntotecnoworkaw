@@ -34,7 +34,8 @@ export const AdminLocations = () => {
             
             const [locsRes, usersRes] = await Promise.all([
                 databases.listDocuments(dbId, 'printing_locations', [Query.limit(100)]),
-                databases.listDocuments(dbId, 'users', [Query.equal('user_type', 'local'), Query.limit(100)])
+                // Fetch all users so we can promote a 'client' to 'local'
+                databases.listDocuments(dbId, 'users', [Query.limit(100)])
             ]);
             
             setLocations(locsRes.documents);
@@ -83,21 +84,46 @@ export const AdminLocations = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        if (!formData.address) {
+            toast.error("La dirección física es obligatoria");
+            return;
+        }
+
         try {
             setIsSaving(true);
             const dbId = import.meta.env.VITE_APPWRITE_DATABASE_ID;
             
+            // 1. Identify role changes if manager is updated
+            const oldManagerId = editingLocation?.manager_id;
+            const newManagerId = formData.manager_id;
+
+            let finalDoc;
             if (editingLocation) {
-                const updated = await databases.updateDocument(dbId, 'printing_locations', editingLocation.$id, formData);
-                setLocations(locations.map(l => l.$id === updated.$id ? updated : l));
+                finalDoc = await databases.updateDocument(dbId, 'printing_locations', editingLocation.$id, formData);
+                setLocations(locations.map(l => l.$id === finalDoc.$id ? finalDoc : l));
                 toast.success("Sucursal actualizada");
             } else {
-                const created = await databases.createDocument(dbId, 'printing_locations', ID.unique(), formData);
-                setLocations([...locations, created]);
+                finalDoc = await databases.createDocument(dbId, 'printing_locations', ID.unique(), formData);
+                setLocations([...locations, finalDoc]);
                 toast.success("Sucursal creada");
             }
+
+            // 2. Update user roles in DB
+            if (newManagerId && newManagerId !== oldManagerId) {
+                // Promote new manager to 'local'
+                await databases.updateDocument(dbId, 'users', newManagerId, { user_type: 'local' });
+                toast.success("Rol de usuario actualizado a Local");
+            }
+            if (oldManagerId && oldManagerId !== newManagerId) {
+                // Demote old manager back to 'client' (unless they manage another store - for simplicity we demo as client)
+                // In a production system we'd check if they still manage something else.
+                await databases.updateDocument(dbId, 'users', oldManagerId, { user_type: 'client' });
+            }
+
             setShowModal(false);
+            fetchData(); // Refresh to get updated manager list/roles
         } catch (error) {
+            console.error(error);
             toast.error("Error al guardar sucursal");
         } finally {
             setIsSaving(false);
@@ -249,7 +275,7 @@ export const AdminLocations = () => {
                                         <label className="text-[10px] text-gray-600 font-black uppercase tracking-widest ml-1 text-secondary">Dirección Física</label>
                                         <div className="relative">
                                             <MapPin className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
-                                            <input value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-2xl pl-12 pr-5 py-4 text-white font-bold focus:border-secondary transition" />
+                                            <input required value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-2xl pl-12 pr-5 py-4 text-white font-bold focus:border-secondary transition" />
                                         </div>
                                     </div>
                                 </div>

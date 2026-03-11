@@ -175,12 +175,39 @@ export const AdminMaintenance = () => {
 
                     <div className="bg-card/50 backdrop-blur-xl border border-white/10 rounded-2xl p-6 shadow-glow">
                         <h2 className="text-xl font-bold text-white flex items-center gap-2 mb-4"><Activity className="text-secondary" /> Estado del Backend</h2>
-                        <div className="flex items-center justify-between p-4 bg-black/20 rounded-xl">
-                            <div className="flex items-center gap-3">
-                                <div className="w-3 h-3 rounded-full bg-success shadow-[0_0_8px_rgba(34,197,94,0.8)]"></div>
-                                <span className="text-white font-medium">Appwrite Core Active</span>
+                        <div className="space-y-4">
+                            <div className="flex items-center justify-between p-4 bg-black/20 rounded-xl">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-3 h-3 rounded-full bg-success shadow-[0_0_8px_rgba(34,197,94,0.8)]"></div>
+                                    <span className="text-white font-medium">Appwrite Core Active</span>
+                                </div>
+                                <button onClick={fetchSettings} className="text-gray-400 hover:text-white transition"><RefreshCw size={18} /></button>
                             </div>
-                            <button onClick={fetchSettings} className="text-gray-400 hover:text-white transition"><RefreshCw size={18} /></button>
+                            
+                            <div className="p-4 bg-white/5 rounded-xl space-y-3">
+                                <p className="text-[10px] font-black uppercase tracking-widest text-gray-500 italic mb-2">Verificación de Recursos</p>
+                                <div className="flex justify-between items-center text-sm">
+                                    <span className="text-gray-400">Colección `system_config`</span>
+                                    {loading ? <Loader2 size={14} className="animate-spin" /> : (
+                                        prices.some(p => p.price > 0) ? <span className="text-success font-bold">OK</span> : <span className="text-red-500 font-bold">No Detectada</span>
+                                    )}
+                                </div>
+                                <div className="flex justify-between items-center text-sm">
+                                    <span className="text-gray-400">Bucket `branding`</span>
+                                    <span className="text-gray-500 italic text-xs">Requiere subida inicial</span>
+                                </div>
+                                <div className="flex justify-between items-center text-sm">
+                                    <span className="text-gray-400">Bucket `orders_files`</span>
+                                    {files.length > 0 ? <span className="text-success font-bold">OK ({files.length})</span> : <span className="text-orange-500 font-bold text-xs italic">Vacío o No Detectado</span>}
+                                </div>
+                            </div>
+
+                            <div className="p-4 bg-primary/5 border border-primary/20 rounded-xl">
+                                <p className="text-[10px] text-primary-glow font-bold mb-1">¿ERRORES 404?</p>
+                                <p className="text-[10px] text-gray-400 leading-relaxed">
+                                    Si ves errores 404 en consola al subir imágenes, asegúrate de haber creado el bucket con ID <code className="text-white">branding</code> y la colección con ID <code className="text-white">system_config</code> en tu consola de Appwrite.
+                                </p>
+                            </div>
                         </div>
                     </div>
                 </div>
