@@ -1,5 +1,5 @@
 import { Outlet, NavLink } from 'react-router';
-import { Home, FileText, Gift, LogOut, Ticket } from 'lucide-react';
+import { Home, FileText, Gift, LogOut, Ticket, Users } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export const MainLayout = () => {
@@ -21,6 +21,7 @@ export const MainLayout = () => {
         } else if (role === 'admin') {
             links.push({ to: '/admin/overview', icon: <FileText size={20} />, label: 'Reportes Globales' });
             links.push({ to: '/admin/locations', icon: <Home size={20} />, label: 'Gestión Locales' });
+            links.push({ to: '/admin/users', icon: <Users size={20} />, label: 'Gestión Usuarios' });
         }
 
         links.push({ to: '/tickets', icon: <Ticket size={20} />, label: 'Soporte' });

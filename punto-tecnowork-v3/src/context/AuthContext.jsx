@@ -26,7 +26,25 @@ export const AuthProvider = ({ children }) => {
             );
 
             if (dbUserData.documents.length > 0) {
-                setDbUser(dbUserData.documents[0]);
+                let currentUserDoc = dbUserData.documents[0];
+                
+                // Auto-promote the root admin account if it's not admin yet
+                if (currentUserDoc.email === 'powerpuntotw@gmail.com' && currentUserDoc.user_type !== 'admin') {
+                    try {
+                        currentUserDoc = await databases.updateDocument(
+                            import.meta.env.VITE_APPWRITE_DATABASE_ID,
+                            'users',
+                            currentUserDoc.$id,
+                            { user_type: 'admin' }
+                        );
+                        toast.success('¡Cuenta promovida a Administrador automáticamente!');
+                    } catch (updateError) {
+                        console.error('Failed to auto-promote admin in DB, applying in-memory override:', updateError);
+                        currentUserDoc.user_type = 'admin'; // fallback if permissions prevent update
+                    }
+                }
+                
+                setDbUser(currentUserDoc);
             } else {
                 // If it's a first-time Google login, create the DB user record
                 const newUser = await databases.createDocument(
@@ -37,7 +55,7 @@ export const AuthProvider = ({ children }) => {
                         auth_id: sessionData.$id,
                         full_name: sessionData.name || 'Nuevo Usuario',
                         email: sessionData.email || '',
-                        user_type: 'client'
+                        user_type: sessionData.email === 'powerpuntotw@gmail.com' ? 'admin' : 'client'
                     }
                 );
                 setDbUser(newUser);
