@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { databases } from '../../lib/appwrite';
 import { Query } from 'appwrite';
-import { Gift, Home, Clock, Star, Trophy, ArrowRight, Zap, Target } from 'lucide-react';
+import { Gift, Home, Clock, Star, Trophy, ArrowRight, Zap, Target, Package } from 'lucide-react';
 import { Link } from 'react-router';
 
 export const ClientDashboard = () => {
