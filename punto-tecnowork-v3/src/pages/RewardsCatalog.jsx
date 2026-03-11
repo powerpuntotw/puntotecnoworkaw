@@ -1,58 +1,161 @@
-import { Gift, Lock } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { useAuth } from '../context/AuthContext';
+import { databases, storage } from '../lib/appwrite';
+import { Query, ID } from 'appwrite';
+import toast from 'react-hot-toast';
+import { Gift, Star, ShoppingBag, ArrowRight, Loader2, Info } from 'lucide-react';
 
 export const RewardsCatalog = () => {
+    const { user, dbUser, fetchDBUser } = useAuth();
+    const [rewards, setRewards] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [isProcessing, setIsProcessing] = useState(false);
+
+    const points = dbUser?.points || 0;
+
+    const fetchRewards = async () => {
+        try {
+            const dbId = import.meta.env.VITE_APPWRITE_DATABASE_ID;
+            const res = await databases.listDocuments(dbId, 'rewards', [
+                Query.equal('is_active', true)
+            ]);
+            setRewards(res.documents);
+        } catch (error) {
+            console.error("Error fetching rewards:", error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchRewards();
+    }, []);
+
+    const handleRedeem = async (reward) => {
+        if (points < reward.points_cost) {
+            toast.error("No tienes puntos suficientes.");
+            return;
+        }
+
+        const confirm = window.confirm(`¿Seguro que quieres canjear "${reward.name}" por ${reward.points_cost} puntos?`);
+        if (!confirm) return;
+
+        try {
+            setIsProcessing(true);
+            const dbId = import.meta.env.VITE_APPWRITE_DATABASE_ID;
+
+            // 1. Create Redeem Document
+            const redeemCode = Math.random().toString(36).substring(2, 10).toUpperCase();
+            await databases.createDocument(dbId, 'redeems', ID.unique(), {
+                client_id: user.$id,
+                client_name: user.name,
+                reward_id: reward.$id,
+                reward_name: reward.name,
+                points_cost: reward.points_cost,
+                status: 'pendiente',
+                code: redeemCode,
+                // Assumed to be redeemed at any local for now, 
+                // or user selects one in a more complex flow
+            });
+
+            // 2. Subtract Points from User
+            await databases.updateDocument(dbId, 'users', dbUser.$id, {
+                points: points - reward.points_cost
+            });
+
+            // 3. Log into Points History
+            await databases.createDocument(dbId, 'points_history', ID.unique(), {
+                client_id: user.$id,
+                type: 'minus',
+                amount: reward.points_cost,
+                reason: `Canje de premio: ${reward.name}`
+            });
+
+            toast.success("¡Canje exitoso! Usa el código " + redeemCode + " en tu sucursal.", { duration: 6000 });
+            fetchDBUser(); // Refresh user points
+        } catch (error) {
+            console.error("Redeem error:", error);
+            toast.error("Error al procesar el canje.");
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+
     return (
-        <div className="max-w-6xl mx-auto space-y-8">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 bg-card border border-white/5 p-8 rounded-3xl glass shadow-[0_0_30px_rgba(6,182,212,0.05)]">
-                <div>
-                    <h1 className="text-3xl font-bold text-white mb-2">Canjea tus puntos, disfruta tus premios</h1>
-                    <p className="text-gray-400">Imprime inteligentemente. Obtienes el 10% de cada compra en puntos.</p>
-                </div>
-                <div className="bg-secondary/10 border border-secondary/30 rounded-2xl p-6 text-center min-w-[200px] shadow-[inset_0_0_20px_rgba(6,182,212,0.2)]">
-                    <p className="text-secondary text-sm font-semibold uppercase font-mono">Saldo Actual</p>
-                    <p className="text-4xl font-bold flex items-center justify-center gap-2 bg-gradient-hero bg-clip-text text-transparent drop-shadow-sm mt-1">1,500 <Gift size={28} className="text-secondary opacity-80" /></p>
+        <div className="space-y-10 pb-20">
+            <div className="relative rounded-[40px] overflow-hidden bg-gradient-hero p-1 w-full shadow-2xl shadow-primary/20">
+                <div className="bg-background/90 backdrop-blur-2xl rounded-[38px] p-8 md:p-12 flex flex-col md:flex-row justify-between items-center gap-8 border border-white/5">
+                    <div className="space-y-4 text-center md:text-left">
+                        <h1 className="text-5xl font-black text-white italic tracking-tighter">Catálogo de <span className="text-primary-glow">Premios</span></h1>
+                        <p className="text-gray-400 text-lg max-w-md">Utiliza tus puntos acumulados para obtener descuentos y productos exclusivos.</p>
+                    </div>
+                    <div className="bg-white/5 border border-white/10 rounded-[32px] p-8 flex flex-col items-center shadow-inner group">
+                         <div className="w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center text-primary-glow mb-4 shadow-glow group-hover:scale-110 transition duration-500">
+                            <Star size={32} />
+                         </div>
+                         <div className="text-4xl font-black text-white">{points.toLocaleString()}</div>
+                         <div className="text-[10px] text-gray-500 uppercase tracking-[0.2em] font-bold mt-2">Puntos Disponibles</div>
+                    </div>
                 </div>
             </div>
 
-            <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
-                <button className="px-6 py-2 rounded-full bg-primary text-white font-medium border border-primary-glow/50 shadow-[0_0_15px_rgba(99,102,241,0.4)] transition">Todos</button>
-                <button className="px-6 py-2 rounded-full bg-white/5 text-gray-400 font-medium border border-white/10 hover:bg-white/10 hover:text-white transition whitespace-nowrap">Merchandising</button>
-                <button className="px-6 py-2 rounded-full bg-white/5 text-gray-400 font-medium border border-white/10 hover:bg-white/10 hover:text-white transition whitespace-nowrap">Descuentos</button>
-                <button className="px-6 py-2 rounded-full bg-white/5 text-gray-400 font-medium border border-white/10 hover:bg-white/10 hover:text-white transition whitespace-nowrap">Servicios Digitales</button>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                {/* Reward Card: Available */}
-                <div className="bg-card border border-white/10 rounded-3xl overflow-hidden glass hover:border-primary/50 transition-all group">
-                    <div className="h-48 bg-gradient-to-br from-[#1a1a2e] to-[#16213e] flex items-center justify-center relative overflow-hidden">
-                        <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&q=80&w=500')] bg-cover bg-center opacity-40 group-hover:opacity-60 transition-opacity"></div>
-                        <div className="absolute inset-0 bg-gradient-to-t from-background to-transparent"></div>
-                    </div>
-                    <div className="p-6 relative z-10 -mt-10">
-                        <h3 className="text-xl font-bold text-white mb-1">Camiseta Exclusiva v3</h3>
-                        <p className="text-sm text-gray-400 mb-6">Camiseta térmica 100% algodón con logo brilla en la oscuridad.</p>
-                        <button className="w-full py-3 bg-primary/20 hover:bg-primary border border-primary rounded-xl text-white font-semibold flex items-center justify-center gap-2 transition shadow-[0_0_15px_rgba(99,102,241,0.3)] hover:shadow-[0_0_25px_rgba(99,102,241,0.6)]">
-                            Canjear por 500 Pts
-                        </button>
-                    </div>
+            {loading ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                    {Array(6).fill(0).map((_, i) => <div key={i} className="h-80 bg-card/50 animate-pulse rounded-[32px]" />)}
                 </div>
-
-                {/* Reward Card: Unavailable (Locked) */}
-                <div className="bg-card border border-white/5 rounded-3xl overflow-hidden glass opacity-80">
-                    <div className="h-48 bg-gradient-to-br from-gray-900 to-black flex items-center justify-center relative overflow-hidden grayscale">
-                        <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1527443224154-c4a3942d3acf?auto=format&fit=crop&q=80&w=500')] bg-cover bg-center opacity-30"></div>
-                        <div className="absolute inset-0 bg-gradient-to-t from-background to-transparent"></div>
-                    </div>
-                    <div className="p-6 relative z-10 -mt-10">
-                        <h3 className="text-xl font-bold text-gray-300 mb-1">Monitor Pro 27&quot;</h3>
-                        <p className="text-sm text-gray-500 mb-6">Sorteo exclusivo trimestral para creadores nivel Oro.</p>
-                        <div className="flex flex-col items-center">
-                            <button disabled className="w-full py-3 bg-white/5 border border-white/10 rounded-xl text-gray-500 font-semibold flex items-center justify-center gap-2 cursor-not-allowed">
-                                <Lock size={16} /> Canjear por 2,500 Pts
-                            </button>
-                            <span className="text-xs text-secondary mt-2 font-medium bg-secondary/10 px-3 py-1 rounded-full"><Lock size={10} className="inline mr-1" />Te faltan 1,000 Pts</span>
+            ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                    {rewards.map(reward => (
+                        <div key={reward.$id} className="bg-card/50 backdrop-blur-xl border border-white/10 rounded-[32px] overflow-hidden group hover:border-primary/50 transition duration-500 shadow-xl flex flex-col h-full">
+                            <div className="h-48 bg-white/5 relative overflow-hidden">
+                                {reward.image_id ? (
+                                    <img 
+                                        src={storage.getFilePreview(import.meta.env.VITE_STORAGE_BUCKET_ID || 'default', reward.image_id)} 
+                                        alt={reward.name}
+                                        className="w-full h-full object-cover group-hover:scale-110 transition duration-700"
+                                    />
+                                ) : (
+                                    <div className="w-full h-full flex items-center justify-center text-gray-700">
+                                        <Gift size={64} />
+                                    </div>
+                                )}
+                                <div className="absolute top-4 right-4 bg-black/60 backdrop-blur-md px-4 py-1.5 rounded-full border border-white/20 text-xs font-black text-white">
+                                    {reward.points_cost} PTS
+                                </div>
+                            </div>
+                            <div className="p-8 flex-1 flex flex-col">
+                                <h3 className="text-xl font-bold text-white mb-2 group-hover:text-primary-glow transition">{reward.name}</h3>
+                                <p className="text-gray-500 text-xs leading-relaxed mb-6 flex-1">{reward.description || 'Sin descripción disponible.'}</p>
+                                
+                                <button 
+                                    onClick={() => handleRedeem(reward)}
+                                    disabled={isProcessing || points < reward.points_cost}
+                                    className={`w-full py-4 rounded-2xl font-black text-xs uppercase tracking-widest transition flex items-center justify-center gap-3 ${
+                                        points >= reward.points_cost 
+                                        ? 'bg-primary hover:bg-primary-glow text-white shadow-glow' 
+                                        : 'bg-white/5 text-gray-600 border border-white/10 cursor-not-allowed'
+                                    }`}
+                                >
+                                    {isProcessing ? <Loader2 className="animate-spin" /> : (
+                                        <>
+                                            {points >= reward.points_cost ? 'Canjear Ahora' : 'Faltan ' + (reward.points_cost - points) + ' pts'}
+                                            <ArrowRight size={16} />
+                                        </>
+                                    )}
+                                </button>
+                            </div>
                         </div>
-                    </div>
+                    ))}
+                </div>
+            )}
+
+            <div className="bg-indigo-500/5 border border-indigo-500/10 p-8 rounded-[40px] flex flex-col md:flex-row items-center gap-6">
+                <div className="p-4 bg-indigo-500/10 rounded-2xl text-indigo-400">
+                    <Info size={24} />
+                </div>
+                <div className="flex-1 text-center md:text-left">
+                    <h4 className="text-lg font-bold text-white mb-1">¿Cómo funciona el canje?</h4>
+                    <p className="text-sm text-gray-500">Una vez que canjees tus puntos, obtendrás un código único. Presenta este código en cualquier sucursal adherida para retirar tu premio físico.</p>
                 </div>
             </div>
         </div>

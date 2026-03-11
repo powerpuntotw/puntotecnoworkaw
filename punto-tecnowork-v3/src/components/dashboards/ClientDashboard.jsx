@@ -1,151 +1,163 @@
 import { useState, useEffect } from 'react';
-import client, { databases } from '../../lib/appwrite';
+import { useAuth } from '../../context/AuthContext';
+import { databases } from '../../lib/appwrite';
 import { Query } from 'appwrite';
+import { Gift, Home, Clock, Star, Trophy, ArrowRight, Zap, Target } from 'lucide-react';
 import { Link } from 'react-router';
 
-export const ClientDashboard = ({ user, dbUser }) => {
-    const [orders, setOrders] = useState([]);
-    const [points, setPoints] = useState(0);
+export const ClientDashboard = () => {
+    const { user, dbUser } = useAuth();
+    const [recentOrders, setRecentOrders] = useState([]);
+    const [loading, setLoading] = useState(true);
 
-    useEffect(() => {
-        if (!user) return;
+    const points = dbUser?.points || 0;
+    const historicalPoints = dbUser?.historical_points || points; // Fallback to current if historical not found
 
-        // Fetch User's Recent Orders
-        const fetchOrders = async () => {
-            try {
-                const res = await databases.listDocuments(
-                    import.meta.env.VITE_APPWRITE_DATABASE_ID,
-                    'orders',
-                    [
-                        Query.equal('client_id', user.$id),
-                        Query.orderDesc('$createdAt'),
-                        Query.limit(5)
-                    ]
-                );
-                setOrders(res.documents);
-            } catch (error) {
-                console.error("Error fetching orders:", error);
-            }
-        };
+    // Tier calculation logic
+    const getTierInfo = (pts) => {
+        if (pts >= 10000) return { name: 'Leyenda', icon: <Trophy className="text-yellow-400" />, next: 'Nivel Máximo', progress: 100, color: 'from-yellow-500 to-amber-600' };
+        if (pts >= 5000) return { name: 'Platino', icon: <Star className="text-blue-300" />, next: '10,000 pts para Leyenda', progress: (pts/10000)*100, color: 'from-blue-400 to-indigo-600' };
+        if (pts >= 2000) return { name: 'Oro', icon: <Target className="text-yellow-500" />, next: '5,000 pts para Platino', progress: (pts/5000)*100, color: 'from-yellow-400 to-orange-500' };
+        if (pts >= 500) return { name: 'Plata', icon: <Zap className="text-gray-300" />, next: '2,000 pts para Oro', progress: (pts/2000)*100, color: 'from-gray-300 to-slate-500' };
+        return { name: 'Bronce', icon: <Zap className="text-orange-400" />, next: '500 pts para Plata', progress: (pts/500)*100, color: 'from-orange-400 to-red-600' };
+    };
 
-        // Fetch User's Points
-        const fetchPoints = async () => {
-            try {
-                const res = await databases.listDocuments(
-                    import.meta.env.VITE_APPWRITE_DATABASE_ID,
-                    'points_accounts',
-                    [Query.equal('client_id', user.$id)]
-                );
-                if (res.documents.length > 0) {
-                    setPoints(res.documents[0].total_points);
-                }
-            } catch (error) {
-                console.error("Error fetching points:", error);
-            }
-        };
+    const tier = getTierInfo(historicalPoints);
 
-        fetchOrders();
-        fetchPoints();
-
-        // Realtime Subscription for Orders
-        const unsubscribe = client.subscribe(
-            `databases.${import.meta.env.VITE_APPWRITE_DATABASE_ID}.collections.orders.documents`,
-            response => {
-                // Check if the event is related to the current user's orders
-                if (response.payload.client_id === user.$id) {
-                    if (response.events.includes('databases.*.collections.*.documents.*.create')) {
-                        setOrders(prev => [response.payload, ...prev].slice(0, 5));
-                    }
-                    if (response.events.includes('databases.*.collections.*.documents.*.update')) {
-                        setOrders(prev => prev.map(order => order.$id === response.payload.$id ? response.payload : order));
-                    }
-                }
-            }
-        );
-
-        return () => unsubscribe();
-    }, [user]);
-
-    const getStatusTheme = (status) => {
-        switch (status) {
-            case 'pendiente': return 'bg-warning/20 text-warning border-warning/30';
-            case 'en_proceso': return 'bg-secondary/20 text-secondary border-secondary/30';
-            case 'listo': return 'bg-success/20 text-success border-success/30';
-            case 'entregado': return 'bg-gray-500/20 text-gray-400 border-gray-500/30';
-            case 'cancelado': return 'bg-red-500/20 text-red-500 border-red-500/30';
-            default: return 'bg-white/10 text-white border-white/20';
+    const fetchRecentOrders = async () => {
+        try {
+            const dbId = import.meta.env.VITE_APPWRITE_DATABASE_ID;
+            const res = await databases.listDocuments(dbId, 'orders', [
+                Query.equal('client_id', user.$id),
+                Query.orderDesc('$createdAt'),
+                Query.limit(5)
+            ]);
+            setRecentOrders(res.documents);
+        } catch (error) {
+            console.error("Error fetching client orders:", error);
+        } finally {
+            setLoading(false);
         }
     };
 
-    // Calculate level based on points
-    const getLevel = (pts) => {
-        if (pts >= 3000) return { name: 'Diamante', next: null, color: 'text-secondary' };
-        if (pts >= 2000) return { name: 'Oro', next: 3000, color: 'text-warning' };
-        if (pts >= 1000) return { name: 'Plata', next: 2000, color: 'text-gray-300' };
-        return { name: 'Bronce', next: 1000, color: 'text-[#cd7f32]' };
-    };
-
-    const level = getLevel(points);
-    const progress = level.next ? (points / level.next) * 100 : 100;
+    useEffect(() => {
+        if (user?.$id) fetchRecentOrders();
+    }, [user?.$id]);
 
     return (
-        <div className="space-y-6">
-            <div className="flex flex-col md:flex-row gap-6 justify-between items-start md:items-center bg-card p-6 rounded-2xl border border-white/5 shadow-xl glass">
-                <div>
-                    <h1 className={`text-3xl font-bold ${level.color} drop-shadow-md`}>Nivel {level.name}</h1>
-                    {level.next ? (
-                        <p className="text-gray-400 mt-2">Te faltan {level.next - points} Pts para el siguiente nivel</p>
-                    ) : (
-                        <p className="text-gray-400 mt-2">¡Desbloqueaste el nivel máximo!</p>
-                    )}
+        <div className="space-y-8 pb-10">
+            {/* Cabecera de Bienvenida y Puntos */}
+            <div className="bg-card/50 backdrop-blur-xl border border-white/10 rounded-3xl p-8 relative overflow-hidden shadow-glow">
+                <div className={`absolute top-0 right-0 w-64 h-64 bg-gradient-to-br ${tier.color} opacity-10 blur-3xl -mr-20 -mt-20`}></div>
+                <div className="relative flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                    <div>
+                        <div className="flex items-center gap-3 mb-2">
+                             <div className={`p-2 rounded-lg bg-gradient-to-br ${tier.color} shadow-lg`}>
+                                {tier.icon}
+                             </div>
+                             <span className="text-sm font-bold tracking-widest text-gray-400 uppercase">Nivel {tier.name}</span>
+                        </div>
+                        <h1 className="text-4xl font-extrabold text-white">¡Hola, {user?.name?.split(' ')[0]}!</h1>
+                        <p className="text-gray-400 mt-2">Tienes <span className="text-white font-bold">{points.toLocaleString()} puntos</span> disponibles para canjear.</p>
+                    </div>
+                    <Link to="/rewards" className="group bg-primary hover:bg-primary-glow text-white px-8 py-4 rounded-2xl font-bold transition flex items-center gap-3 shadow-glow">
+                        <Gift size={22} /> Canjear Puntos 
+                        <ArrowRight size={18} className="group-hover:translate-x-1 transition" />
+                    </Link>
                 </div>
-                <div className="w-full md:w-1/2">
-                    <div className="h-3 w-full bg-white/10 rounded-full overflow-hidden">
-                        <div className={`h-full ${level.name === 'Oro' ? 'bg-warning shadow-[0_0_10px_rgba(250,204,21,0.8)]' : level.name === 'Diamante' ? 'bg-secondary shadow-[0_0_10px_rgba(6,182,212,0.8)]' : 'bg-primary-glow shadow-[0_0_10px_rgba(99,102,241,0.8)]'} rounded-full transition-all duration-1000`} style={{ width: `${progress}%` }}></div>
+
+                {/* Barra de Progreso a Siguiente Nivel */}
+                <div className="mt-10 space-y-3">
+                    <div className="flex justify-between text-xs font-bold uppercase tracking-tight">
+                        <span className="text-gray-500">Progreso hacia el siguiente nivel</span>
+                        <span className="text-primary-glow">{tier.next}</span>
+                    </div>
+                    <div className="h-4 bg-white/5 rounded-full overflow-hidden border border-white/5">
+                        <div 
+                            className={`h-full bg-gradient-to-r ${tier.color} transition-all duration-1000 shadow-[0_0_15px_rgba(99,102,241,0.5)]`}
+                            style={{ width: `${tier.progress}%` }}
+                        ></div>
                     </div>
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <Link to="/orders/new" className="h-40 bg-gradient-to-br from-primary/20 to-primary/5 border border-primary/30 rounded-2xl flex flex-col items-center justify-center hover:border-primary-glow/50 hover:shadow-[0_0_20px_rgba(99,102,241,0.2)] transition-all group cursor-pointer">
-                    <span className="text-2xl font-bold text-white group-hover:text-primary-glow drop-shadow-md">Nueva Orden</span>
-                    <span className="text-sm text-gray-400 mt-2">Imprime tus archivos ahora</span>
-                </Link>
-                <Link to="/rewards" className="h-40 bg-gradient-to-br from-secondary/20 to-secondary/5 border border-secondary/30 rounded-2xl flex flex-col items-center justify-center hover:border-secondary/80 hover:shadow-[0_0_20px_rgba(6,182,212,0.2)] transition-all group cursor-pointer">
-                    <span className="text-2xl font-bold text-white group-hover:text-secondary drop-shadow-md">Catálogo de Premios</span>
-                    <span className="text-sm text-gray-400 mt-2">Tienes {points} puntos</span>
-                </Link>
-            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                {/* Mis Pedidos Recientes */}
+                <div className="lg:col-span-2 space-y-4">
+                    <div className="flex justify-between items-end mb-2">
+                        <h2 className="text-xl font-bold text-white flex items-center gap-3">
+                            <Clock className="text-primary" /> Pedidos Recientes
+                        </h2>
+                        <Link to="/history" className="text-sm text-gray-500 hover:text-primary transition underline underline-offset-4">Ver todo el historial</Link>
+                    </div>
 
-            <div className="bg-card p-6 rounded-2xl border border-white/5">
-                <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-xl font-semibold text-white">Órdenes Recientes</h2>
-                    <span className="flex items-center gap-2 text-xs text-secondary animate-pulse">
-                        <div className="w-2 h-2 rounded-full bg-secondary"></div>
-                        En vivo
-                    </span>
-                </div>
-                <div className="space-y-3">
-                    {orders.length === 0 ? (
-                        <p className="text-gray-500 text-center py-4">No tienes órdenes recientes. ¡Crea una nueva orden!</p>
-                    ) : (
-                        orders.map((order) => (
-                            <div key={order.$id} className="flex flex-col md:flex-row justify-between items-start md:items-center p-4 bg-white/5 rounded-xl border border-white/5 hover:bg-white/10 transition gap-4 md:gap-0">
-                                <div>
-                                    <p className="font-medium text-gray-200">Pedido #{order.$id.substring(0, 6).toUpperCase()}</p>
-                                    <p className="text-sm text-gray-500">{order.files?.length || 0} archivo(s) • {order.copies} copia(s) • {order.color_mode === 'color' ? 'Color' : 'B/N'}</p>
-                                </div>
-                                <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-end">
-                                    <span className={`px-3 py-1 rounded-full text-xs font-semibold uppercase border ${getStatusTheme(order.status)}`}>
-                                        {order.status.replace('_', ' ')}
-                                    </span>
-                                    <span className="font-mono text-gray-300 font-semibold">${order.unit_price}</span>
-                                </div>
+                    <div className="space-y-4">
+                        {loading ? (
+                            Array(3).fill(0).map((_, i) => <div key={i} className="h-24 bg-card/30 animate-pulse rounded-2xl" />)
+                        ) : recentOrders.length === 0 ? (
+                            <div className="bg-card/30 border border-white/5 rounded-2xl p-10 text-center">
+                                <p className="text-gray-500">Aún no has realizado pedidos.</p>
+                                <Link to="/orders/new" className="text-primary hover:underline mt-2 inline-block">¡Empieza ahora!</Link>
                             </div>
-                        ))
-                    )}
+                        ) : (
+                            recentOrders.map(order => (
+                                <div key={order.$id} className="bg-card/50 backdrop-blur-xl border border-white/10 p-5 rounded-2xl flex items-center justify-between group hover:border-primary/30 transition">
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center text-gray-400 group-hover:text-primary transition">
+                                            <Package size={24} />
+                                        </div>
+                                        <div>
+                                            <div className="text-sm font-bold text-white uppercase tracking-tighter italic">#{order.order_number || order.$id.substring(0,8).toUpperCase()}</div>
+                                            <div className="text-xs text-gray-500 mt-1">{new Date(order.$createdAt).toLocaleDateString()}</div>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-8">
+                                        <div className="text-right hidden sm:block">
+                                            <div className="text-sm font-medium text-gray-300 capitalize">{order.status || 'Recibida'}</div>
+                                            <div className="text-[10px] text-gray-500 tracking-widest uppercase">Estado</div>
+                                        </div>
+                                        <div className="h-8 w-[1px] bg-white/10 hidden sm:block"></div>
+                                        <div className="text-right">
+                                            <div className="text-lg font-black text-white">${(order.total_amount || 0).toLocaleString()}</div>
+                                            <div className="text-xs text-primary-glow font-bold">+{Math.round((order.total_amount || 0) * 0.1)} pts</div>
+                                        </div>
+                                        <ArrowRight size={20} className="text-gray-700 group-hover:text-white transition" />
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                </div>
+
+                {/* Acciones Rápidas / Stats */}
+                <div className="space-y-6">
+                    <div className="bg-gradient-to-br from-indigo-900/40 to-black border border-indigo-500/20 rounded-3xl p-6 relative overflow-hidden group">
+                        <div className="absolute -bottom-6 -right-6 text-indigo-500/10 group-hover:scale-125 transition duration-500">
+                            <Target size={120} />
+                        </div>
+                        <h3 className="text-lg font-bold text-white mb-2">Puntos Acumulados</h3>
+                        <div className="text-4xl font-black text-white mb-4 italic">{historicalPoints.toLocaleString()} <span className="text-sm not-italic font-normal text-indigo-400">Ptos históricos</span></div>
+                        <p className="text-xs text-gray-400 leading-relaxed">Cada impresión te acerca más al nivel Platino y beneficios exclusivos.</p>
+                    </div>
+
+                    <div className="bg-card/50 backdrop-blur-xl border border-white/10 rounded-3xl p-6 space-y-4">
+                        <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest">Atajos Rápidos</h3>
+                        <div className="grid grid-cols-2 gap-3">
+                            <Link to="/orders/new" className="bg-white/5 hover:bg-white/10 p-4 rounded-2xl flex flex-col items-center gap-2 transition border border-white/5">
+                                <FileText className="text-primary-glow" />
+                                <span className="text-[10px] font-bold uppercase">Imprimir</span>
+                            </Link>
+                            <Link to="/tickets" className="bg-white/5 hover:bg-white/10 p-4 rounded-2xl flex flex-col items-center gap-2 transition border border-white/5">
+                                <MessageSquare className="text-secondary" />
+                                <span className="text-[10px] font-bold uppercase">Soporte</span>
+                            </Link>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
     );
 };
+
+// Simple imports for icons used but missing in this scope
+import { FileText, MessageSquare } from 'lucide-react';

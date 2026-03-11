@@ -14,7 +14,7 @@ export const DashboardIndex = () => {
 
     switch (role) {
         case 'local':
-            return <LocalDashboard user={user} dbUser={dbUser} />;
+            return <LocalDashboard user={user} dbUser={dbUser} locationId={dbUser?.location_id} />;
         case 'admin':
             return <AdminDashboard user={user} dbUser={dbUser} />;
         case 'client':

@@ -1,125 +1,199 @@
 import { useState, useEffect } from 'react';
 import { databases } from '../../lib/appwrite';
 import { Query } from 'appwrite';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
+import { Users, Package, MapPin, TrendingUp, DollarSign, Activity, Gift, Clock } from 'lucide-react';
+import { Link } from 'react-router';
 
 export const AdminDashboard = () => {
-    const [stats, setStats] = useState({
-        revenue: 0,
-        orders: 0,
-        users: 0,
-        points: 0
-    });
     const [loading, setLoading] = useState(true);
+    const [stats, setStats] = useState({
+        totalUsers: 0,
+        totalOrders: 0,
+        totalPoints: 0,
+        activeLocals: 0,
+        todayRevenue: 0
+    });
+    const [chartData, setChartData] = useState([]);
+    const [locals, setLocals] = useState([]);
+
+    const fetchDashboardData = async () => {
+        try {
+            setLoading(true);
+            const dbId = import.meta.env.VITE_APPWRITE_DATABASE_ID;
+            
+            // Fetch Totals
+            const [usersRes, ordersRes, localsRes] = await Promise.all([
+                databases.listDocuments(dbId, 'users', [Query.limit(1)]),
+                databases.listDocuments(dbId, 'orders', [Query.limit(1000)]),
+                databases.listDocuments(dbId, 'printing_locations', [Query.limit(100)])
+            ]);
+
+            const orders = ordersRes.documents;
+            const revenue = orders.reduce((sum, o) => sum + (o.total_amount || 0), 0);
+            
+            setStats({
+                totalUsers: usersRes.total,
+                totalOrders: ordersRes.total,
+                totalPoints: orders.length * 10, // Placeholder calculation
+                activeLocals: localsRes.documents.filter(l => l.is_open).length,
+                todayRevenue: revenue
+            });
+
+            setLocals(localsRes.documents);
+
+            // Chart data: Orders by day (last 7 days)
+            const daily = {};
+            orders.slice(-50).forEach(o => {
+                const date = new Date(o.$createdAt).toLocaleDateString([], { weekday: 'short' });
+                daily[date] = (daily[date] || 0) + 1;
+            });
+            setChartData(Object.entries(daily).map(([name, orders]) => ({ name, orders })));
+
+        } catch (error) {
+            console.error("Error fetching admin dashboard data:", error);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     useEffect(() => {
-        const fetchAdminStats = async () => {
-            try {
-                const dbId = import.meta.env.VITE_APPWRITE_DATABASE_ID;
-                
-                // Fetch Orders (we might need pagination if it's > 100, assuming < 100 for now or getting all queries)
-                // Appwrite's listDocuments returns a 'total' property we can use for counts easily.
-                const ordersRes = await databases.listDocuments(dbId, 'orders', [Query.limit(500)]);
-                
-                // Calculate Revenue from non-cancelled orders
-                const totalRevenue = ordersRes.documents
-                    .filter(order => order.status !== 'cancelado')
-                    .reduce((sum, order) => sum + (order.unit_price || 0), 0);
-
-                // Fetch Users count
-                const usersRes = await databases.listDocuments(dbId, 'users', [Query.limit(1)]);
-
-                // Fetch Points
-                const pointsRes = await databases.listDocuments(dbId, 'points_accounts', [Query.limit(500)]);
-                const totalPoints = pointsRes.documents.reduce((sum, acc) => sum + (acc.total_points || 0), 0);
-
-                setStats({
-                    revenue: totalRevenue,
-                    orders: ordersRes.total,
-                    users: usersRes.total,
-                    points: totalPoints
-                });
-
-            } catch (error) {
-                console.error("Error fetching admin stats:", error);
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        fetchAdminStats();
+        fetchDashboardData();
     }, []);
 
+    const KPI_CARDS = [
+        { label: 'Usuarios Totales', value: stats.totalUsers, icon: Users, color: 'text-primary', link: '/admin/users' },
+        { label: 'Órdenes Globales', value: stats.totalOrders, icon: Package, color: 'text-secondary', link: '/admin/orders' },
+        { label: 'Facturación Global', value: `$${stats.todayRevenue.toLocaleString()}`, icon: DollarSign, color: 'text-success', link: '/admin/reports' },
+        { label: 'Sucursales Online', value: stats.activeLocals, icon: MapPin, color: 'text-warning', link: '/admin/locations' }
+    ];
+
     return (
-        <div className="space-y-6">
-            <div className="flex justify-between items-center bg-card p-6 rounded-2xl border border-white/5 shadow-xl glass">
+        <div className="space-y-8 pb-10">
+            <div className="flex justify-between items-center">
                 <div>
-                    <h1 className="text-3xl font-bold bg-gradient-hero bg-clip-text text-transparent">Panel de Administración</h1>
-                    <p className="text-sm text-gray-400 mt-1">Control Global y Estadísticas</p>
+                    <h1 className="text-3xl font-black bg-gradient-hero bg-clip-text text-transparent">Panel Principal</h1>
+                    <p className="text-gray-400 mt-2">Bienvenido al centro de mando de Punto Tecnowork.</p>
+                </div>
+                <div className="p-2 bg-white/5 border border-white/10 rounded-xl flex items-center gap-2 text-xs text-gray-400">
+                    <Activity size={14} className="text-success animate-pulse" /> Sistema Operativo
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div className="bg-white/5 border-l-4 border-success rounded-xl p-5 backdrop-blur-sm relative overflow-hidden group">
-                    <p className="text-gray-400 text-sm font-medium">Ingresos Totales (Global)</p>
-                    <p className="text-2xl font-bold text-white mt-2">
-                        {loading ? <span className="animate-pulse w-20 h-8 bg-white/10 rounded block"></span> : `$${stats.revenue.toLocaleString()}`}
-                    </p>
-                </div>
-                <div className="bg-white/5 border-l-4 border-primary rounded-xl p-5 backdrop-blur-sm relative overflow-hidden group">
-                    <p className="text-gray-400 text-sm font-medium">Órdenes Procesadas</p>
-                    <p className="text-2xl font-bold text-white mt-2">
-                        {loading ? <span className="animate-pulse w-16 h-8 bg-white/10 rounded block"></span> : stats.orders.toLocaleString()}
-                    </p>
-                </div>
-                <div className="bg-white/5 border-l-4 border-secondary rounded-xl p-5 backdrop-blur-sm relative overflow-hidden group">
-                    <p className="text-gray-400 text-sm font-medium">Usuarios Registrados</p>
-                    <p className="text-2xl font-bold text-white mt-2">
-                        {loading ? <span className="animate-pulse w-16 h-8 bg-white/10 rounded block"></span> : stats.users.toLocaleString()}
-                    </p>
-                </div>
-                <div className="bg-white/5 border-l-4 border-warning rounded-xl p-5 backdrop-blur-sm relative overflow-hidden group">
-                    <p className="text-gray-400 text-sm font-medium">Puntos Latentes</p>
-                    <p className="text-2xl font-bold text-white mt-2">
-                        {loading ? <span className="animate-pulse w-16 h-8 bg-white/10 rounded block"></span> : stats.points.toLocaleString()}
-                    </p>
-                </div>
+            {/* KPI Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                {KPI_CARDS.map((card, idx) => (
+                    <Link key={idx} to={card.link} className="bg-card/50 backdrop-blur-xl border border-white/10 p-6 rounded-3xl shadow-glow hover:border-primary/50 transition transform hover:-translate-y-1">
+                        <div className="flex justify-between items-start mb-4">
+                            <div className={`p-3 rounded-2xl bg-white/5 ${card.color}`}>
+                                <card.icon size={24} />
+                            </div>
+                            <TrendingUp size={16} className="text-success opacity-50" />
+                        </div>
+                        <div className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">{card.label}</div>
+                        <div className="text-3xl font-black text-white">{loading ? '...' : card.value}</div>
+                    </Link>
+                ))}
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="bg-card rounded-2xl border border-white/5 p-6 h-80 flex items-center justify-center">
-                    <div className="text-center">
-                        <p className="text-gray-500 mb-2">[ Área de Gráfico Recharts - Ventas ]</p>
-                        <div className="w-full h-32 bg-secondary/10 border-b-2 border-secondary rounded-lg"></div>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                {/* Gráfico de Actividad */}
+                <div className="lg:col-span-2 bg-card/50 backdrop-blur-xl border border-white/10 rounded-3xl p-8 shadow-glow">
+                    <div className="flex justify-between items-center mb-8">
+                        <h3 className="text-lg font-bold text-white italic">Producción Semanal</h3>
+                        <span className="text-xs text-primary-glow font-bold underline cursor-pointer">Ver detalle completo</span>
+                    </div>
+                    <div className="h-[300px] w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={chartData}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#ffffff05" vertical={false} />
+                                <XAxis dataKey="name" stroke="#666" fontSize={12} tickLine={false} axisLine={false} />
+                                <YAxis stroke="#666" fontSize={12} tickLine={false} axisLine={false} />
+                                <Tooltip 
+                                    contentStyle={{ backgroundColor: '#111', border: '1px solid #333', borderRadius: '16px', fontSize: '12px' }}
+                                    cursor={{ fill: '#ffffff05' }}
+                                />
+                                <Bar dataKey="orders" fill="url(#colorGradient)" radius={[6, 6, 0, 0]} />
+                                <defs>
+                                    <linearGradient id="colorGradient" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="0%" stopColor="#6366f1" />
+                                        <stop offset="100%" stopColor="#a855f7" />
+                                    </linearGradient>
+                                </defs>
+                            </BarChart>
+                        </ResponsiveContainer>
                     </div>
                 </div>
-                <div className="bg-card rounded-2xl border border-white/5 p-6 h-80 flex items-center justify-center">
-                    <div className="text-center">
-                        <p className="text-gray-500 mb-2">[ Área de Gráfico Recharts - Niveles ]</p>
-                        <div className="w-32 h-32 rounded-full border-[10px] border-primary/50 border-t-secondary/80 border-r-warning/50 border-b-white/10 mx-auto"></div>
+
+                {/* Estado de Sucursales */}
+                <div className="bg-card/50 backdrop-blur-xl border border-white/10 rounded-3xl p-8 shadow-glow overflow-hidden">
+                    <h3 className="text-lg font-bold text-white mb-6">Red Operativa</h3>
+                    <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                        {locals.map(local => (
+                            <div key={local.$id} className="flex items-center justify-between p-4 bg-white/5 rounded-2xl group hover:bg-white/10 transition">
+                                <div className="flex items-center gap-3">
+                                    <div className={`w-2 h-2 rounded-full ${local.is_open ? 'bg-success shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-red-500'}`}></div>
+                                    <div className="truncate max-w-[120px]">
+                                        <p className="text-sm font-bold text-white truncate">{local.name}</p>
+                                        <p className="text-[10px] text-gray-500 font-mono uppercase tracking-tighter">
+                                            {local.last_active_at ? new Date(local.last_active_at).toLocaleTimeString() : 'Inactivo'}
+                                        </p>
+                                    </div>
+                                </div>
+                                <div className="text-right">
+                                    <p className="text-xs font-black text-primary-glow">24 Ord</p>
+                                    <p className="text-[9px] text-gray-600 uppercase">Actividad</p>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                    <Link to="/admin/locations" className="mt-6 block text-center text-xs font-bold text-gray-500 hover:text-white transition group">
+                        Administrar Sucursales <ArrowRight size={12} className="inline ml-1 group-hover:translate-x-1 transition" />
+                    </Link>
+                </div>
+            </div>
+
+            {/* Bottom Section: Recent Alerts/Actions */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="bg-gradient-to-br from-primary/10 to-transparent border border-primary/20 rounded-3xl p-8 flex items-center justify-between group cursor-pointer overflow-hidden relative">
+                    <div className="absolute -right-10 -bottom-10 text-primary opacity-5 group-hover:scale-110 transition duration-700">
+                        <Gift size={200} />
+                    </div>
+                    <div className="relative">
+                        <h4 className="text-xl font-bold text-white">Catálogo de Premios</h4>
+                        <p className="text-gray-400 mt-2 max-w-[200px]">Gestiona las recompensas y puntos de fidelidad.</p>
+                        <Link to="/admin/rewards" className="mt-4 inline-flex items-center gap-2 text-primary-glow font-bold text-sm">
+                            Ir al Panel <ArrowRight size={16} />
+                        </Link>
+                    </div>
+                    <div className="hidden sm:block">
+                        <div className="w-16 h-16 rounded-2xl bg-primary/20 flex items-center justify-center text-primary-glow shadow-glow underline decoration-double">
+                            <Gift size={32} />
+                        </div>
+                    </div>
+                </div>
+
+                <div className="bg-gradient-to-br from-secondary/10 to-transparent border border-secondary/20 rounded-3xl p-8 flex items-center justify-between group cursor-pointer overflow-hidden relative">
+                    <div className="absolute -right-10 -bottom-10 text-secondary opacity-5 group-hover:scale-110 transition duration-700">
+                        <History size={200} />
+                    </div>
+                    <div className="relative">
+                        <h4 className="text-xl font-bold text-white">Registro de Auditoría</h4>
+                        <p className="text-gray-400 mt-2 max-w-[200px]">Control total sobre los cambios del sistema.</p>
+                        <Link to="/admin/audit" className="mt-4 inline-flex items-center gap-2 text-secondary font-bold text-sm">
+                            Ver Logs <ArrowRight size={16} />
+                        </Link>
+                    </div>
+                    <div className="hidden sm:block">
+                        <div className="w-16 h-16 rounded-2xl bg-secondary/20 flex items-center justify-center text-secondary shadow-glow underline decoration-double">
+                            <History size={32} />
+                        </div>
                     </div>
                 </div>
             </div>
-
-            <div className="bg-card rounded-2xl border border-white/5 overflow-hidden">
-                <div className="p-4 border-b border-white/5 bg-white/5 flex justify-between items-center">
-                    <h2 className="font-semibold text-white">Rendimiento por Sucursal</h2>
-                </div>
-                <table className="w-full text-left">
-                    <tbody className="divide-y divide-white/5">
-                        <tr className="hover:bg-white/5 transition">
-                            <td className="p-4 text-white font-medium">Sucursal Centro</td>
-                            <td className="p-4"><span className="text-success text-sm flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-success"></div> Abierta</span></td>
-                            <td className="p-4 text-right text-gray-300 font-mono">$45,200</td>
-                        </tr>
-                        <tr className="hover:bg-white/5 transition">
-                            <td className="p-4 text-white font-medium">Campus Universitario</td>
-                            <td className="p-4"><span className="text-gray-500 text-sm flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-gray-500"></div> Cerrada</span></td>
-                            <td className="p-4 text-right text-gray-300 font-mono">$0</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-
         </div>
     );
 };
+
+// Simplified imports if not present
+import { ArrowRight, History } from 'lucide-react';

@@ -1,5 +1,5 @@
 import { Outlet, NavLink } from 'react-router';
-import { Home, FileText, Gift, LogOut, Ticket, Users } from 'lucide-react';
+import { Home, FileText, Gift, LogOut, Ticket, Users, LayoutGrid, MapPin, BarChart3, Settings, MessageSquare, Palette, History, UserCircle, DollarSign } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export const MainLayout = () => {
@@ -16,15 +16,25 @@ export const MainLayout = () => {
         if (role === 'client') {
             links.push({ to: '/orders/new', icon: <FileText size={20} />, label: 'Nueva Orden' });
             links.push({ to: '/rewards', icon: <Gift size={20} />, label: 'Recompensas' });
+            links.push({ to: '/history', icon: <History size={20} />, label: 'Historial' });
         } else if (role === 'local') {
-            links.push({ to: '/local/orders', icon: <FileText size={20} />, label: 'Panel de Órdenes' });
+            links.push({ to: '/local/orders', icon: <FileText size={20} />, label: 'Órdenes' });
+            links.push({ to: '/local/customers', icon: <Users size={20} />, label: 'Clientes' });
+            links.push({ to: '/local/prices', icon: <DollarSign size={20} />, label: 'Precios' });
+            links.push({ to: '/local/redeems', icon: <Ticket size={20} />, label: 'Canjes' });
         } else if (role === 'admin') {
-            links.push({ to: '/admin/overview', icon: <FileText size={20} />, label: 'Reportes Globales' });
-            links.push({ to: '/admin/locations', icon: <Home size={20} />, label: 'Gestión Locales' });
-            links.push({ to: '/admin/users', icon: <Users size={20} />, label: 'Gestión Usuarios' });
+            links.push({ to: '/admin/users', icon: <Users size={20} />, label: 'Usuarios' });
+            links.push({ to: '/admin/locations', icon: <MapPin size={20} />, label: 'Locales' });
+            links.push({ to: '/admin/orders', icon: <FileText size={20} />, label: 'Órdenes' });
+            links.push({ to: '/admin/rewards', icon: <Gift size={20} />, label: 'Premios' });
+            links.push({ to: '/admin/reports', icon: <BarChart3 size={20} />, label: 'Reportes' });
+            links.push({ to: '/admin/maintenance', icon: <Settings size={20} />, label: 'Mantenimiento' });
+            links.push({ to: '/admin/branding', icon: <Palette size={20} />, label: 'Branding' });
+            links.push({ to: '/admin/audit', icon: <History size={20} />, label: 'Auditoría' });
         }
-
-        links.push({ to: '/tickets', icon: <Ticket size={20} />, label: 'Soporte' });
+        
+        links.push({ to: '/profile', icon: <UserCircle size={20} />, label: 'Perfil' });
+        links.push({ to: '/tickets', icon: <MessageSquare size={20} />, label: 'Soporte' });
 
         return links;
     };

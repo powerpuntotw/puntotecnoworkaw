@@ -5,6 +5,19 @@ import { DashboardIndex } from './components/DashboardIndex';
 import { AdminDashboard } from './components/dashboards/AdminDashboard';
 import { AdminLocations } from './components/dashboards/AdminLocations';
 import { AdminUsers } from './components/dashboards/AdminUsers';
+import { AdminOrders } from './components/dashboards/AdminOrders';
+import { AdminRewards } from './components/dashboards/AdminRewards';
+import { AdminMaintenance } from './components/dashboards/AdminMaintenance';
+import { AdminBranding } from './components/dashboards/AdminBranding';
+import { AdminReports } from './components/dashboards/AdminReports';
+import { AdminAudit } from './components/dashboards/AdminAudit';
+import { LocalDashboard } from './components/dashboards/LocalDashboard';
+import { LocalOrders } from './components/dashboards/LocalOrders';
+import { LocalCustomers } from './components/dashboards/LocalCustomers';
+import { LocalPrices } from './components/dashboards/LocalPrices';
+import { LocalRedeems } from './components/dashboards/LocalRedeems';
+import { ClientHistory } from './components/dashboards/ClientHistory';
+import { UserProfile } from './components/dashboards/UserProfile';
 import { Landing } from './pages/Landing';
 import { NewOrderFlow } from './pages/NewOrderFlow';
 import { RewardsCatalog } from './pages/RewardsCatalog';
@@ -38,8 +51,23 @@ function App() {
             <Route path="/admin/overview" element={<AdminDashboard />} />
             <Route path="/admin/locations" element={<AdminLocations />} />
             <Route path="/admin/users" element={<AdminUsers />} />
+            <Route path="/admin/orders" element={<AdminOrders />} />
+            <Route path="/admin/rewards" element={<AdminRewards />} />
+            <Route path="/admin/reports" element={<AdminReports />} />
+            <Route path="/admin/maintenance" element={<AdminMaintenance />} />
+            <Route path="/admin/branding" element={<AdminBranding />} />
+            <Route path="/admin/audit" element={<AdminAudit />} />
 
-            {/* Sistema Unificado de Soport/Chat */}
+            {/* Local */}
+            <Route path="/local/overview" element={<LocalDashboard locationId={dbUser?.location_id} />} />
+            <Route path="/local/orders" element={<LocalOrders locationId={dbUser?.location_id} />} />
+            <Route path="/local/customers" element={<LocalCustomers locationId={dbUser?.location_id} />} />
+            <Route path="/local/prices" element={<LocalPrices locationId={dbUser?.location_id} />} />
+            <Route path="/local/redeems" element={<LocalRedeems locationId={dbUser?.location_id} />} />
+
+            {/* Cliente / Común */}
+            <Route path="/history" element={<ClientHistory />} />
+            <Route path="/profile" element={<UserProfile />} />
             <Route path="/tickets" element={<TicketsSystem />} />
           </Route>
         </Route>
