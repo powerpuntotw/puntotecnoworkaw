@@ -2,6 +2,8 @@ import { Routes, Route } from 'react-router';
 import { ProtectedRoute, PublicRoute } from './components/ProtectedRoutes';
 import { MainLayout } from './components/Layout';
 import { DashboardIndex } from './components/DashboardIndex';
+import { AdminDashboard } from './components/dashboards/AdminDashboard';
+import { AdminLocations } from './components/dashboards/AdminLocations';
 import { AdminUsers } from './components/dashboards/AdminUsers';
 import { Landing } from './pages/Landing';
 import { NewOrderFlow } from './pages/NewOrderFlow';
@@ -33,6 +35,8 @@ function App() {
             <Route path="/rewards" element={<RewardsCatalog />} />
 
             {/* Administrador */}
+            <Route path="/admin/overview" element={<AdminDashboard />} />
+            <Route path="/admin/locations" element={<AdminLocations />} />
             <Route path="/admin/users" element={<AdminUsers />} />
 
             {/* Sistema Unificado de Soport/Chat */}

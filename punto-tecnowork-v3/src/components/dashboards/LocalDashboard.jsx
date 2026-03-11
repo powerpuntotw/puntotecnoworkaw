@@ -23,7 +23,7 @@ export const LocalDashboard = ({ user, dbUser }) => {
                 if (targetLocationId) {
                     // Fetch Location Info
                     const locDoc = await databases.getDocument(import.meta.env.VITE_APPWRITE_DATABASE_ID, 'printing_locations', targetLocationId);
-                    setLocationStats(prev => ({ ...prev, name: locDoc.name, isOpen: locDoc.is_open }));
+                    setLocationStats(prev => ({ ...prev, id: locDoc.$id, name: locDoc.name, isOpen: locDoc.is_open }));
                 }
 
                 // Fetch latest orders (e.g. active ones)
@@ -93,8 +93,27 @@ export const LocalDashboard = ({ user, dbUser }) => {
     };
 
     const toggleOpenStatus = async () => {
-        // Logic to toggle location_id open status 
-        toast("Función de apertura/cierre centralizada", { icon: "🔒" });
+        if (!locationId && !locationStats.id) {
+            toast.error("No hay sucursal asociada a este dashboard");
+            return;
+        }
+        
+        const targetId = locationId || locationStats.id;
+        const newState = !locationStats.isOpen;
+
+        try {
+            await databases.updateDocument(
+                import.meta.env.VITE_APPWRITE_DATABASE_ID,
+                'printing_locations',
+                targetId,
+                { is_open: newState }
+            );
+            setLocationStats(prev => ({ ...prev, isOpen: newState }));
+            toast.success(`Sucursal ${newState ? 'Abierta' : 'Cerrada'}`);
+        } catch (error) {
+            console.error("Error al abri/cerrar sucursal", error);
+            toast.error("Error al actualizar estado");
+        }
     };
 
     return (
