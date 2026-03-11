@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { databases, client } from '../lib/appwrite';
 import { Query, ID } from 'appwrite';
 import toast from 'react-hot-toast';
-import { MessageSquare, Send, User, ChevronRight, Loader2, Sparkles, AlertCircle } from 'lucide-react';
+import { MessageSquare, Send, User, ChevronRight, Loader2, Sparkles, AlertCircle, Phone } from 'lucide-react';
 
 export const TicketsSystem = () => {
     const { user, dbUser } = useAuth();
@@ -52,7 +52,10 @@ export const TicketsSystem = () => {
             response => {
                 if (response.events.includes('databases.*.collections.*.documents.*.create')) {
                     setTickets(prev => [response.payload, ...prev]);
-                    toast.success("Nuevo ticket recibido", { icon: '🎫' });
+                    toast.success("Nuevo ticket recibido", { 
+                        icon: '🎫',
+                        style: { background: '#1a1a1a', color: '#fff', borderRadius: '15px' }
+                    });
                 }
             }
         );
@@ -131,7 +134,7 @@ export const TicketsSystem = () => {
                 subject: subject,
                 status: 'open'
             });
-            toast.success("Ticket creado correctamente");
+            toast.success("Ticket abierto correctamente");
             selectTicket(ticket);
         } catch (error) {
             toast.error("Error al crear ticket");
@@ -139,37 +142,44 @@ export const TicketsSystem = () => {
     };
 
     return (
-        <div className="h-[calc(100vh-140px)] flex gap-6 overflow-hidden">
+        <div className="h-[calc(100vh-140px)] flex gap-6 overflow-hidden pb-4">
             {/* Sidebar de Tickets */}
-            <div className="w-80 flex flex-col bg-card/50 backdrop-blur-xl border border-white/10 rounded-3xl overflow-hidden shadow-glow">
-                <div className="p-6 border-b border-white/5 flex justify-between items-center">
-                    <h2 className="font-bold text-white flex items-center gap-2">
-                        <MessageSquare size={18} className="text-primary" /> Soporte
-                    </h2>
+            <div className="w-80 flex flex-col bg-card/40 backdrop-blur-3xl border border-white/10 rounded-[2.5rem] overflow-hidden shadow-2xl relative">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-3xl" />
+                
+                <div className="p-8 border-b border-white/5 flex justify-between items-center relative z-10">
+                    <div>
+                        <h2 className="text-xl font-black text-white italic uppercase tracking-tighter">Soporte</h2>
+                        <p className="text-[9px] text-gray-500 font-black uppercase tracking-widest mt-0.5">Centro de Ayuda</p>
+                    </div>
                     {dbUser?.user_type === 'client' && (
-                        <button onClick={createTicket} className="p-2 bg-primary/20 text-primary-glow rounded-lg hover:bg-primary/30 transition">
-                            <Sparkles size={16} />
+                        <button onClick={createTicket} className="p-3 bg-primary hover:bg-primary-glow text-white rounded-2xl transition shadow-glow">
+                            <Plus size={18} />
                         </button>
                     )}
                 </div>
-                <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
+                
+                <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar relative z-10">
                     {loading ? (
-                        <div className="flex justify-center py-10"><Loader2 className="animate-spin text-gray-600" /></div>
+                        <div className="flex justify-center py-20 text-primary"><Loader2 className="animate-spin" /></div>
                     ) : tickets.length === 0 ? (
-                        <p className="text-center text-gray-500 text-sm mt-10">No hay hilos activos.</p>
+                        <div className="text-center py-10 opacity-20 flex flex-col items-center gap-3">
+                            <MessageSquare size={32} />
+                            <p className="text-[10px] font-black uppercase tracking-widest">Sin casos activos</p>
+                        </div>
                     ) : (
                         tickets.map(t => (
                             <div 
                                 key={t.$id} 
                                 onClick={() => selectTicket(t)}
-                                className={`p-4 rounded-2xl cursor-pointer transition flex items-center gap-3 border ${activeTicket?.$id === t.$id ? 'bg-primary/10 border-primary/30' : 'bg-white/5 border-transparent hover:border-white/10'}`}
+                                className={`group p-5 rounded-[1.8rem] cursor-pointer transition-all duration-300 flex items-center gap-4 border relative overflow-hidden ${activeTicket?.$id === t.$id ? 'bg-primary/10 border-primary/30 shadow-glow shadow-primary/5' : 'bg-white/3 border-white/5 hover:border-white/10'}`}
                             >
-                                <div className={`w-2 h-2 rounded-full ${t.status === 'open' ? 'bg-primary shadow-[0_0_8px_rgba(99,102,241,0.5)]' : 'bg-gray-600'}`}></div>
+                                <div className={`w-2.5 h-2.5 rounded-full ${t.status === 'open' ? 'bg-primary shadow-[0_0_12px_rgba(235,28,36,0.5)] animate-pulse' : 'bg-gray-700'}`}></div>
                                 <div className="flex-1 overflow-hidden">
-                                    <h4 className="text-sm font-bold text-white truncate">{t.subject}</h4>
-                                    <p className="text-[10px] text-gray-500 truncate">{t.client_name}</p>
+                                    <h4 className="text-sm font-black text-white truncate italic uppercase tracking-tight group-hover:text-primary transition">{t.subject}</h4>
+                                    <p className="text-[9px] text-gray-500 font-bold uppercase tracking-widest mt-1">{t.client_name}</p>
                                 </div>
-                                <ChevronRight size={14} className="text-gray-700" />
+                                <ChevronRight size={14} className={`transition-transform duration-300 ${activeTicket?.$id === t.$id ? 'translate-x-1 text-primary' : 'text-gray-700'}`} />
                             </div>
                         ))
                     )}
@@ -177,64 +187,69 @@ export const TicketsSystem = () => {
             </div>
 
             {/* Area de Chat */}
-            <div className="flex-1 flex flex-col bg-card/50 backdrop-blur-xl border border-white/10 rounded-3xl overflow-hidden shadow-glow relative">
+            <div className="flex-1 flex flex-col bg-card/40 backdrop-blur-3xl border border-white/10 rounded-[2.5rem] overflow-hidden shadow-2xl relative">
+                <div className="absolute bottom-0 left-0 w-96 h-96 bg-primary/5 rounded-full blur-[120px] pointer-events-none" />
+                
                 {activeTicket ? (
                     <>
-                        <div className="p-6 border-b border-white/5 bg-white/5 flex justify-between items-center">
-                            <div className="flex items-center gap-4">
-                                <div className="p-3 bg-primary/20 rounded-xl text-primary-glow font-bold">#</div>
+                        <div className="p-8 border-b border-white/5 bg-white/3 flex justify-between items-center relative z-10">
+                            <div className="flex items-center gap-6">
+                                <div className="w-14 h-14 bg-primary/20 rounded-2xl flex items-center justify-center text-primary-glow font-black text-2xl border border-primary/20 italic shadow-glow">
+                                    #
+                                </div>
                                 <div>
-                                    <h3 className="font-bold text-white">{activeTicket.subject}</h3>
-                                    <p className="text-xs text-gray-500">Ticket de {activeTicket.client_name}</p>
+                                    <h3 className="text-2xl font-black text-white italic uppercase tracking-tighter">{activeTicket.subject}</h3>
+                                    <p className="text-xs text-gray-500 font-medium">Chat interactivo con {activeTicket.client_name}</p>
                                 </div>
                             </div>
-                            <div className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${activeTicket.status === 'open' ? 'bg-primary/20 text-primary-glow' : 'bg-gray-500/20 text-gray-400'}`}>
-                                {activeTicket.status === 'open' ? 'En espera' : 'Respondido'}
+                            <div className={`px-5 py-2 rounded-full text-[10px] font-black uppercase tracking-[0.2em] border italic ${activeTicket.status === 'open' ? 'bg-primary/10 text-primary border-primary/20' : 'bg-success/10 text-success border-success/20'}`}>
+                                {activeTicket.status === 'open' ? 'En espera' : 'Resuelto'}
                             </div>
                         </div>
 
-                        <div className="flex-1 overflow-y-auto p-8 space-y-6 custom-scrollbar">
+                        <div className="flex-1 overflow-y-auto p-10 space-y-8 custom-scrollbar relative z-10">
                             {messages.map((m, idx) => (
-                                <div key={idx} className={`flex ${m.sender_id === user.$id ? 'justify-end' : 'justify-start'}`}>
-                                    <div className={`max-w-[70%] p-4 rounded-2xl relative shadow-lg ${m.sender_id === user.$id ? 'bg-primary text-white rounded-tr-none' : 'bg-white/5 text-gray-200 border border-white/10 rounded-tl-none'}`}>
-                                        <p className="text-sm leading-relaxed">{m.content}</p>
-                                        <span className="text-[10px] opacity-40 mt-2 block text-right italic">
-                                            {new Date(m.$createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                        </span>
+                                <div key={idx} className={`flex ${m.sender_id === user.$id ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-2`}>
+                                    <div className={`max-w-[65%] p-6 rounded-[2rem] relative shadow-2xl transition hover:scale-[1.02] duration-300 ${m.sender_id === user.$id ? 'bg-primary text-white rounded-tr-none ring-4 ring-primary/10' : 'bg-white/5 text-gray-200 border border-white/10 rounded-tl-none ring-4 ring-white/5'}`}>
+                                        <div className="flex justify-between items-center mb-2 gap-4">
+                                            <span className="text-[9px] font-black uppercase tracking-widest opacity-60 italic">{m.sender_name}</span>
+                                            <span className="text-[9px] font-bold opacity-30 italic">{new Date(m.$createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                        </div>
+                                        <p className="text-sm font-medium leading-relaxed tracking-tight">{m.content}</p>
                                     </div>
                                 </div>
                             ))}
                             <div ref={messagesEndRef} />
                         </div>
 
-                        <form onSubmit={handleSendMessage} className="p-6 bg-black/20 flex gap-4">
+                        <form onSubmit={handleSendMessage} className="p-8 bg-black/30 border-t border-white/5 flex gap-4 relative z-10">
                             <input 
                                 type="text"
-                                placeholder="Escribe tu mensaje aquí..."
+                                placeholder="Redactar mensaje..."
                                 value={newMessage}
                                 onChange={e => setNewMessage(e.target.value)}
-                                className="flex-1 bg-background/50 border border-white/10 rounded-2xl px-6 py-4 text-white outline-none focus:border-primary transition"
+                                className="flex-1 bg-white/5 border border-white/10 rounded-2xl px-6 py-5 text-white font-bold outline-none focus:border-primary transition shadow-inner"
                             />
                             <button 
                                 type="submit" 
                                 disabled={sending || !newMessage.trim()}
-                                className="bg-primary hover:bg-primary-glow text-white w-14 h-14 rounded-2xl flex items-center justify-center shadow-glow transition disabled:opacity-50"
+                                className="bg-primary hover:bg-primary-glow text-white w-16 h-16 rounded-2xl flex items-center justify-center shadow-glow transition disabled:opacity-50 group ring-4 ring-primary/20"
                             >
-                                {sending ? <Loader2 className="animate-spin" /> : <Send size={24} />}
+                                {sending ? <Loader2 className="animate-spin" /> : <Send size={28} className="group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />}
                             </button>
                         </form>
                     </>
                 ) : (
-                    <div className="flex-1 flex flex-col items-center justify-center text-center p-10">
-                        <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center mb-6">
-                            <MessageSquare size={40} className="text-primary-glow opacity-50" />
+                    <div className="flex-1 flex flex-col items-center justify-center text-center p-20 relative z-10">
+                        <div className="w-28 h-28 bg-primary/10 rounded-[2.5rem] flex items-center justify-center mb-8 border border-primary/20 shadow-glow">
+                            <MessageSquare size={48} className="text-primary opacity-60 animate-pulse" />
                         </div>
-                        <h3 className="text-xl font-bold text-white italic">Centro de Soporte Realtime</h3>
-                        <p className="text-gray-500 max-w-sm mt-4">
-                            Selecciona un ticket de la izquierda para ver la conversación o crea uno nuevo para recibir asistencia técnica.
+                        <h3 className="text-3xl font-black text-white italic uppercase tracking-tighter">Terminal de Mensajería</h3>
+                        <p className="text-gray-500 max-w-sm mt-6 font-medium text-lg leading-snug">
+                            Selecciona una conversación del panel lateral o inicia un nuevo caso de soporte.
                         </p>
-                        <div className="mt-8 flex items-center gap-2 text-xs text-primary-glow bg-primary/5 px-4 py-2 rounded-full border border-primary/20 animate-pulse">
-                            <AlertCircle size={14} /> Sistema de mensajería cifrado activo
+                        <div className="mt-12 flex items-center gap-3 text-[10px] font-black uppercase tracking-[0.2em] text-primary bg-primary/5 px-6 py-3 rounded-full border border-primary/10">
+                            <AlertCircle size={16} /> Enlace de Soporte en Tiempo Real Activo
                         </div>
                     </div>
                 )}
@@ -242,3 +257,10 @@ export const TicketsSystem = () => {
         </div>
     );
 };
+
+const Plus = ({ size = 20, className = "" }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className={className}>
+        <line x1="12" y1="5" x2="12" y2="19"></line>
+        <line x1="5" y1="12" x2="19" y2="12"></line>
+    </svg>
+);

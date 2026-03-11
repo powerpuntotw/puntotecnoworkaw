@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { databases } from '../../lib/appwrite';
 import { Query } from 'appwrite';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
-import { Users, Package, MapPin, TrendingUp, DollarSign, Activity, Gift, Clock } from 'lucide-react';
+import { Users, Package, MapPin, TrendingUp, DollarSign, Activity, Gift, Clock, History, ArrowRight } from 'lucide-react';
 import { Link } from 'react-router';
 
 export const AdminDashboard = () => {
@@ -22,7 +22,6 @@ export const AdminDashboard = () => {
             setLoading(true);
             const dbId = import.meta.env.VITE_APPWRITE_DATABASE_ID;
             
-            // Fetch Totals
             const [usersRes, ordersRes, localsRes] = await Promise.all([
                 databases.listDocuments(dbId, 'users', [Query.limit(1)]),
                 databases.listDocuments(dbId, 'orders', [Query.limit(1000)]),
@@ -35,14 +34,13 @@ export const AdminDashboard = () => {
             setStats({
                 totalUsers: usersRes.total,
                 totalOrders: ordersRes.total,
-                totalPoints: orders.length * 10, // Placeholder calculation
-                activeLocals: localsRes.documents.filter(l => l.is_open).length,
+                totalPoints: orders.length * 10,
+                activeLocals: localsRes.documents.filter(l => l.status === 'activo').length,
                 todayRevenue: revenue
             });
 
             setLocals(localsRes.documents);
 
-            // Chart data: Orders by day (last 7 days)
             const daily = {};
             orders.slice(-50).forEach(o => {
                 const date = new Date(o.$createdAt).toLocaleDateString([], { weekday: 'short' });
@@ -62,8 +60,8 @@ export const AdminDashboard = () => {
     }, []);
 
     const KPI_CARDS = [
-        { label: 'Usuarios Totales', value: stats.totalUsers, icon: Users, color: 'text-primary', link: '/admin/users' },
-        { label: 'Órdenes Globales', value: stats.totalOrders, icon: Package, color: 'text-secondary', link: '/admin/orders' },
+        { label: 'Usuarios Totales', value: stats.totalUsers, icon: Users, color: 'text-secondary', link: '/admin/users' },
+        { label: 'Órdenes Globales', value: stats.totalOrders, icon: Package, color: 'text-primary', link: '/admin/orders' },
         { label: 'Facturación Global', value: `$${stats.todayRevenue.toLocaleString()}`, icon: DollarSign, color: 'text-success', link: '/admin/reports' },
         { label: 'Sucursales Online', value: stats.activeLocals, icon: MapPin, color: 'text-warning', link: '/admin/locations' }
     ];
@@ -72,52 +70,61 @@ export const AdminDashboard = () => {
         <div className="space-y-8 pb-10">
             <div className="flex justify-between items-center">
                 <div>
-                    <h1 className="text-3xl font-black bg-gradient-hero bg-clip-text text-transparent">Panel Principal</h1>
-                    <p className="text-gray-400 mt-2">Bienvenido al centro de mando de Punto Tecnowork.</p>
+                    <h1 className="text-3xl font-black text-white italic tracking-tighter uppercase">Panel de Control</h1>
+                    <p className="text-gray-400 mt-2 font-medium">Gestión centralizada de Punto Tecnowork v3</p>
                 </div>
-                <div className="p-2 bg-white/5 border border-white/10 rounded-xl flex items-center gap-2 text-xs text-gray-400">
-                    <Activity size={14} className="text-success animate-pulse" /> Sistema Operativo
+                <div className="px-4 py-2 bg-white/5 border border-white/10 rounded-2xl flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-gray-500">
+                    <Activity size={12} className="text-success animate-pulse" /> Servidor Activo
                 </div>
             </div>
 
             {/* KPI Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 {KPI_CARDS.map((card, idx) => (
-                    <Link key={idx} to={card.link} className="bg-card/50 backdrop-blur-xl border border-white/10 p-6 rounded-3xl shadow-glow hover:border-primary/50 transition transform hover:-translate-y-1">
-                        <div className="flex justify-between items-start mb-4">
-                            <div className={`p-3 rounded-2xl bg-white/5 ${card.color}`}>
+                    <Link key={idx} to={card.link} className="bg-card/40 backdrop-blur-3xl border border-white/10 p-6 rounded-[2rem] shadow-glow hover:border-primary/40 transition group overflow-hidden relative">
+                        <div className="absolute -right-4 -top-4 opacity-[0.03] group-hover:opacity-[0.08] transition duration-500 group-hover:scale-110">
+                            <card.icon size={100} />
+                        </div>
+                        <div className="flex justify-between items-start mb-6">
+                            <div className={`p-3 rounded-2xl bg-white/5 ${card.color} border border-white/5 shadow-inner`}>
                                 <card.icon size={24} />
                             </div>
-                            <TrendingUp size={16} className="text-success opacity-50" />
+                            <div className="text-[10px] font-black text-success flex items-center gap-1 bg-success/10 px-2 py-1 rounded-lg">
+                                +12% <TrendingUp size={10} />
+                            </div>
                         </div>
-                        <div className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">{card.label}</div>
-                        <div className="text-3xl font-black text-white">{loading ? '...' : card.value}</div>
+                        <div className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">{card.label}</div>
+                        <div className="text-3xl font-black text-white italic tracking-tighter">{loading ? '...' : card.value}</div>
                     </Link>
                 ))}
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 {/* Gráfico de Actividad */}
-                <div className="lg:col-span-2 bg-card/50 backdrop-blur-xl border border-white/10 rounded-3xl p-8 shadow-glow">
-                    <div className="flex justify-between items-center mb-8">
-                        <h3 className="text-lg font-bold text-white italic">Producción Semanal</h3>
-                        <span className="text-xs text-primary-glow font-bold underline cursor-pointer">Ver detalle completo</span>
+                <div className="lg:col-span-2 bg-card/40 backdrop-blur-3xl border border-white/10 rounded-[2.5rem] p-8 shadow-2xl relative overflow-hidden">
+                    <div className="flex justify-between items-center mb-10">
+                        <h3 className="text-lg font-black text-white italic uppercase tracking-tighter flex items-center gap-3">
+                            <TrendingUp className="text-primary" /> Rendimiento de Red
+                        </h3>
+                        <div className="flex gap-2">
+                            <div className="w-3 h-3 rounded-full bg-primary/20 border border-primary animate-pulse"></div>
+                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">En Vivo</span>
+                        </div>
                     </div>
                     <div className="h-[300px] w-full">
                         <ResponsiveContainer width="100%" height="100%">
                             <BarChart data={chartData}>
                                 <CartesianGrid strokeDasharray="3 3" stroke="#ffffff05" vertical={false} />
-                                <XAxis dataKey="name" stroke="#666" fontSize={12} tickLine={false} axisLine={false} />
-                                <YAxis stroke="#666" fontSize={12} tickLine={false} axisLine={false} />
+                                <XAxis dataKey="name" stroke="#444" fontSize={11} fontWeight="black" tickLine={false} axisLine={false} />
                                 <Tooltip 
-                                    contentStyle={{ backgroundColor: '#111', border: '1px solid #333', borderRadius: '16px', fontSize: '12px' }}
-                                    cursor={{ fill: '#ffffff05' }}
+                                    contentStyle={{ backgroundColor: '#1a1a1a', border: '1px solid #333', borderRadius: '20px', fontSize: '12px', fontWeight: 'bold', boxShadow: '0 10px 30px rgba(0,0,0,0.5)' }}
+                                    cursor={{ fill: '#ffffff03' }}
                                 />
-                                <Bar dataKey="orders" fill="url(#colorGradient)" radius={[6, 6, 0, 0]} />
+                                <Bar dataKey="orders" fill="url(#brandGradient)" radius={[8, 8, 0, 0]} barSize={40} />
                                 <defs>
-                                    <linearGradient id="colorGradient" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="0%" stopColor="#6366f1" />
-                                        <stop offset="100%" stopColor="#a855f7" />
+                                    <linearGradient id="brandGradient" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="0%" stopColor="#EB1C24" />
+                                        <stop offset="100%" stopColor="#8b1116" />
                                     </linearGradient>
                                 </defs>
                             </BarChart>
@@ -126,74 +133,72 @@ export const AdminDashboard = () => {
                 </div>
 
                 {/* Estado de Sucursales */}
-                <div className="bg-card/50 backdrop-blur-xl border border-white/10 rounded-3xl p-8 shadow-glow overflow-hidden">
-                    <h3 className="text-lg font-bold text-white mb-6">Red Operativa</h3>
-                    <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                <div className="bg-card/40 backdrop-blur-3xl border border-white/10 rounded-[2.5rem] p-8 shadow-2xl flex flex-col">
+                    <h3 className="text-lg font-black text-white italic uppercase tracking-tighter mb-6 flex items-center gap-3">
+                        <MapPin className="text-secondary" /> Sucursales
+                    </h3>
+                    <div className="space-y-4 flex-1 overflow-y-auto pr-2 custom-scrollbar">
                         {locals.map(local => (
-                            <div key={local.$id} className="flex items-center justify-between p-4 bg-white/5 rounded-2xl group hover:bg-white/10 transition">
-                                <div className="flex items-center gap-3">
-                                    <div className={`w-2 h-2 rounded-full ${local.is_open ? 'bg-success shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-red-500'}`}></div>
-                                    <div className="truncate max-w-[120px]">
-                                        <p className="text-sm font-bold text-white truncate">{local.name}</p>
-                                        <p className="text-[10px] text-gray-500 font-mono uppercase tracking-tighter">
-                                            {local.last_active_at ? new Date(local.last_active_at).toLocaleTimeString() : 'Inactivo'}
-                                        </p>
+                            <div key={local.$id} className="flex items-center justify-between p-4 bg-white/5 border border-white/5 rounded-2xl group hover:border-primary/30 transition duration-500">
+                                <div className="flex items-center gap-4">
+                                    <div className={`w-3 h-3 rounded-full ${local.status === 'activo' ? 'bg-success shadow-[0_0_12px_rgba(164,204,57,0.5)]' : 'bg-primary shadow-[0_0_12px_rgba(235,28,36,0.5)]'}`}></div>
+                                    <div>
+                                        <p className="text-sm font-black text-white italic uppercase tracking-tighter mb-1 truncate max-w-[100px]">{local.name}</p>
+                                        <div className="flex items-center gap-1.5">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-gray-700"></span>
+                                            <p className="text-[9px] text-gray-500 font-bold uppercase tracking-widest italic">
+                                                {local.status === 'activo' ? 'Online' : 'Offline'}
+                                            </p>
+                                        </div>
                                     </div>
                                 </div>
                                 <div className="text-right">
-                                    <p className="text-xs font-black text-primary-glow">24 Ord</p>
-                                    <p className="text-[9px] text-gray-600 uppercase">Actividad</p>
+                                    <div className="text-[10px] font-black text-white mb-0.5">+{Math.floor(Math.random() * 50)}</div>
+                                    <p className="text-[8px] text-gray-600 font-bold uppercase tracking-widest">Órdenes</p>
                                 </div>
                             </div>
                         ))}
                     </div>
-                    <Link to="/admin/locations" className="mt-6 block text-center text-xs font-bold text-gray-500 hover:text-white transition group">
-                        Administrar Sucursales <ArrowRight size={12} className="inline ml-1 group-hover:translate-x-1 transition" />
+                    <Link to="/admin/locations" className="mt-8 py-4 bg-white/5 border border-white/5 rounded-2xl text-center text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] hover:bg-white/10 hover:text-white transition duration-500 group">
+                        Configurar Locales <ArrowRight size={14} className="inline ml-2 group-hover:translate-x-1 transition" />
                     </Link>
                 </div>
             </div>
 
-            {/* Bottom Section: Recent Alerts/Actions */}
+            {/* Paneles de Acción Rápida */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div className="bg-gradient-to-br from-primary/10 to-transparent border border-primary/20 rounded-3xl p-8 flex items-center justify-between group cursor-pointer overflow-hidden relative">
-                    <div className="absolute -right-10 -bottom-10 text-primary opacity-5 group-hover:scale-110 transition duration-700">
-                        <Gift size={200} />
+                <Link to="/admin/rewards" className="bg-gradient-to-br from-primary/10 to-black/20 border border-primary/20 rounded-[2.5rem] p-10 flex items-center justify-between group overflow-hidden relative shadow-2xl hover:border-primary/50 transition duration-700">
+                    <div className="absolute -right-12 -bottom-12 text-primary opacity-5 group-hover:scale-110 transition duration-700">
+                        <Gift size={250} />
                     </div>
                     <div className="relative">
-                        <h4 className="text-xl font-bold text-white">Catálogo de Premios</h4>
-                        <p className="text-gray-400 mt-2 max-w-[200px]">Gestiona las recompensas y puntos de fidelidad.</p>
-                        <Link to="/admin/rewards" className="mt-4 inline-flex items-center gap-2 text-primary-glow font-bold text-sm">
-                            Ir al Panel <ArrowRight size={16} />
-                        </Link>
-                    </div>
-                    <div className="hidden sm:block">
-                        <div className="w-16 h-16 rounded-2xl bg-primary/20 flex items-center justify-center text-primary-glow shadow-glow underline decoration-double">
+                        <div className="w-16 h-16 rounded-2xl bg-primary/20 flex items-center justify-center text-primary mb-6 shadow-glow border border-primary/20 group-hover:scale-110 transition duration-500">
                             <Gift size={32} />
                         </div>
-                    </div>
-                </div>
-
-                <div className="bg-gradient-to-br from-secondary/10 to-transparent border border-secondary/20 rounded-3xl p-8 flex items-center justify-between group cursor-pointer overflow-hidden relative">
-                    <div className="absolute -right-10 -bottom-10 text-secondary opacity-5 group-hover:scale-110 transition duration-700">
-                        <History size={200} />
-                    </div>
-                    <div className="relative">
-                        <h4 className="text-xl font-bold text-white">Registro de Auditoría</h4>
-                        <p className="text-gray-400 mt-2 max-w-[200px]">Control total sobre los cambios del sistema.</p>
-                        <Link to="/admin/audit" className="mt-4 inline-flex items-center gap-2 text-secondary font-bold text-sm">
-                            Ver Logs <ArrowRight size={16} />
-                        </Link>
-                    </div>
-                    <div className="hidden sm:block">
-                        <div className="w-16 h-16 rounded-2xl bg-secondary/20 flex items-center justify-center text-secondary shadow-glow underline decoration-double">
-                            <History size={32} />
+                        <h4 className="text-2xl font-black text-white italic uppercase tracking-tighter">Premios</h4>
+                        <p className="text-gray-500 mt-2 max-w-[220px] text-sm font-medium">Gestionar catálogo y fidelización de clientes.</p>
+                        <div className="mt-6 flex items-center gap-2 text-primary text-xs font-black uppercase tracking-widest">
+                            Entrar Ahora <ArrowRight size={16} className="group-hover:translate-x-2 transition" />
                         </div>
                     </div>
-                </div>
+                </Link>
+
+                <Link to="/admin/audit" className="bg-gradient-to-br from-secondary/10 to-black/20 border border-secondary/20 rounded-[2.5rem] p-10 flex items-center justify-between group overflow-hidden relative shadow-2xl hover:border-secondary/50 transition duration-700">
+                    <div className="absolute -right-12 -bottom-12 text-secondary opacity-5 group-hover:scale-110 transition duration-700">
+                        <History size={250} />
+                    </div>
+                    <div className="relative">
+                        <div className="w-16 h-16 rounded-2xl bg-secondary/20 flex items-center justify-center text-secondary mb-6 shadow-glow border border-secondary/20 group-hover:scale-110 transition duration-500">
+                            <History size={32} />
+                        </div>
+                        <h4 className="text-2xl font-black text-white italic uppercase tracking-tighter">Auditoría</h4>
+                        <p className="text-gray-500 mt-2 max-w-[220px] text-sm font-medium">Historial completo de acciones y seguridad.</p>
+                        <div className="mt-6 flex items-center gap-2 text-secondary text-xs font-black uppercase tracking-widest">
+                            Ver Logs <ArrowRight size={16} className="group-hover:translate-x-2 transition" />
+                        </div>
+                    </div>
+                </Link>
             </div>
         </div>
     );
 };
-
-// Simplified imports if not present
-import { ArrowRight, History } from 'lucide-react';

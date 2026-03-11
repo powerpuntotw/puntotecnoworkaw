@@ -3,17 +3,25 @@
 @theme {
   --color-background: #0a0a0f;
   --color-foreground: #f1f5f9;
+  --color-dark: #1a1a1a;
   --color-card: rgba(255, 255, 255, 0.04);
   --color-card-hover: rgba(255, 255, 255, 0.08);
 
-  --color-primary: #6366f1;
-  --color-primary-glow: #818cf8;
+  --color-primary: #EB1C24;
+  --color-primary-glow: #ff4d4d;
   
-  --color-secondary: #06b6d4;
-  --color-success: #10b981;
-  --color-warning: #f59e0b;
+  --color-accent: #FFC905;
+  --color-secondary: #0093D8;
+  --color-success: #A4CC39;
+  --color-warning: #FFC905;
 
-  --background-image-gradient-hero: linear-gradient(135deg, #6366f1 0%, #06b6d4 50%, #10b981 100%);
+  /* Tier Colors */
+  --color-tier-bronze: #6B7280;
+  --color-tier-silver: #9CA3AF;
+  --color-tier-gold: #FFC905;
+  --color-tier-diamond: #0093D8;
+
+  --background-image-gradient-hero: linear-gradient(135deg, #EB1C24 0%, #0093D8 50%, #A4CC39 100%);
 }
 
 @layer base {

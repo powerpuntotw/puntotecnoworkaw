@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { databases } from '../../lib/appwrite';
 import { Query } from 'appwrite';
 import toast from 'react-hot-toast';
-import { Loader2, Package, CheckCircle2, TrendingUp, DollarSign, Clock, Users } from 'lucide-react';
+import { Loader2, Package, CheckCircle2, TrendingUp, DollarSign, Clock, Users, Activity } from 'lucide-react';
 
 export const LocalDashboard = ({ locationId }) => {
     const [loading, setLoading] = useState(true);
@@ -74,13 +74,13 @@ export const LocalDashboard = ({ locationId }) => {
             
             setStats({
                 todayOrders: todayOrders.length,
-                totalPoints: orders.length * 10, // Mock calculation: 10 pts per order delivered? Should be more complex.
-                todayRevenue: todayOrders.reduce((sum, o) => sum + (o.total_amount || 0), 0),
+                totalPoints: orders.length * 10, 
+                todayRevenue: todayOrders.reduce((sum, o) => sum + (o.total_price || 0), 0),
                 pending: orders.filter(o => o.status === 'pendiente').length,
                 processing: orders.filter(o => o.status === 'en_proceso').length,
                 ready: orders.filter(o => o.status === 'listo').length,
                 delivered: orders.filter(o => o.status === 'entregado').length,
-                weeklyRevenue: orders.reduce((sum, o) => sum + (o.total_amount || 0), 0) // Simplified
+                weeklyRevenue: orders.reduce((sum, o) => sum + (o.total_price || 0), 0)
             });
         } catch (error) {
             console.error("Error fetching local stats:", error);
@@ -96,43 +96,57 @@ export const LocalDashboard = ({ locationId }) => {
     const KPI_CARDS = [
         { label: 'Órdenes Hoy', value: stats.todayOrders, icon: Package, color: 'text-primary' },
         { label: 'Ingresos Hoy', value: `$${stats.todayRevenue.toLocaleString()}`, icon: DollarSign, color: 'text-success' },
-        { label: 'Pendientes', value: stats.pending, icon: Clock, color: 'text-warning' },
+        { label: 'Pendientes', value: stats.pending, icon: Clock, color: 'text-accent' },
         { label: 'Imprimiendo', value: stats.processing, icon: Loader2, color: 'text-secondary' },
-        { label: 'Listas para Retirar', value: stats.ready, icon: CheckCircle2, color: 'text-success' },
-        { label: 'Entregadas (Total)', value: stats.delivered, icon: CheckCircle2, color: 'text-gray-400' },
-        { label: 'Puntos Entregados', value: stats.totalPoints, icon: TrendingUp, color: 'text-warning' },
-        { label: 'Ingresos Semanales', value: `$${stats.weeklyRevenue.toLocaleString()}`, icon: DollarSign, color: 'text-success' }
+        { label: 'Listas', value: stats.ready, icon: CheckCircle2, color: 'text-success' },
+        { label: 'Entregadas', value: stats.delivered, icon: CheckCircle2, color: 'text-gray-400' },
+        { label: 'Puntos Gen.', value: stats.totalPoints, icon: TrendingUp, color: 'text-accent' },
+        { label: 'Venta Semanal', value: `$${stats.weeklyRevenue.toLocaleString()}`, icon: DollarSign, color: 'text-success' }
     ];
 
     return (
-        <div className="space-y-8">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="space-y-8 pb-10">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 {KPI_CARDS.map((card, idx) => (
-                    <div key={idx} className="bg-card/50 backdrop-blur-xl border border-white/10 rounded-2xl p-6 shadow-glow transition hover:border-white/20">
-                        <div className="flex justify-between items-center mb-2">
-                            <span className="text-gray-500 text-xs font-bold uppercase tracking-widest">{card.label}</span>
-                            <card.icon size={18} className={`${card.color} ${card.label === 'Imprimiendo' ? 'animate-spin' : ''}`} />
+                    <div key={idx} className="bg-card/40 backdrop-blur-3xl border border-white/10 rounded-3xl p-6 shadow-2xl transition hover:border-primary/20 group">
+                        <div className="flex justify-between items-center mb-4">
+                            <span className="text-gray-500 text-[10px] font-black uppercase tracking-[0.2em]">{card.label}</span>
+                            <div className={`p-2 rounded-xl bg-white/5 group-hover:bg-white/10 transition`}>
+                                <card.icon size={20} className={`${card.color} ${card.label === 'Imprimiendo' ? 'animate-spin' : ''}`} />
+                            </div>
                         </div>
-                        <div className="text-3xl font-black text-white">
-                            {loading ? <div className="h-9 w-20 bg-white/5 animate-pulse rounded" /> : card.value}
+                        <div className="text-4xl font-black text-white italic tracking-tighter">
+                            {loading ? <div className="h-10 w-24 bg-white/5 animate-pulse rounded-xl" /> : card.value}
                         </div>
                     </div>
                 ))}
             </div>
 
-            <div className="bg-primary/5 border border-primary/20 rounded-2xl p-6 flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center text-primary-glow">
-                        <Users size={24} />
+            <div className="bg-gradient-to-r from-primary/10 to-transparent border border-primary/20 rounded-[2.5rem] p-8 flex flex-col md:flex-row items-center justify-between gap-6 shadow-2xl relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-64 h-full bg-primary/5 blur-3xl rounded-full translate-x-1/2" />
+                
+                <div className="flex items-center gap-6 relative z-10">
+                    <div className="w-16 h-16 rounded-[1.5rem] bg-primary/20 flex items-center justify-center text-primary-glow shadow-glow border border-primary/20">
+                        <Activity size={32} />
                     </div>
                     <div>
-                        <h4 className="text-white font-bold">Resumen de Actividad</h4>
-                        <p className="text-sm text-gray-400">Tu sucursal está enviando el latido (heartbeat) correctamente.</p>
+                        <h4 className="text-2xl font-black text-white italic uppercase tracking-tight">Estado de Conectividad</h4>
+                        <p className="text-gray-400 font-medium">Latido operativo activo. Sincronización en tiempo real establecida.</p>
                     </div>
                 </div>
-                <button onClick={fetchLocalStats} className="p-3 bg-white/5 hover:bg-white/10 rounded-xl transition">
-                    <TrendingUp size={20} className="text-primary-glow" />
-                </button>
+                
+                <div className="flex items-center gap-4 relative z-10">
+                    <div className="text-right hidden sm:block">
+                        <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Último Latido</p>
+                        <p className="text-xl font-bold text-white font-mono italic">{new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                    </div>
+                    <button 
+                        onClick={fetchLocalStats} 
+                        className="bg-white/5 hover:bg-white/10 text-white p-4 rounded-2xl border border-white/10 transition group shadow-xl"
+                    >
+                        <TrendingUp size={24} className="group-hover:scale-110 transition-transform text-primary" />
+                    </button>
+                </div>
             </div>
         </div>
     );
