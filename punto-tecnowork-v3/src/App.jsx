@@ -1,4 +1,5 @@
 import { Routes, Route } from 'react-router';
+import { useAuth } from './context/AuthContext';
 import { ProtectedRoute, PublicRoute } from './components/ProtectedRoutes';
 import { MainLayout } from './components/Layout';
 import { DashboardIndex } from './components/DashboardIndex';
@@ -26,6 +27,7 @@ import { AuthCallback } from './components/AuthCallback';
 import { Toaster } from 'react-hot-toast';
 
 function App() {
+  const { dbUser } = useAuth();
   return (
     <>
       <Toaster position="top-right" />
