@@ -1,8 +1,8 @@
 import { Client, Databases, Storage, ID } from 'appwrite';
 
 const client = new Client()
-    .setEndpoint('https://appwrite.tecnowork.mywire.org/v1')
-    .setProject('69aed0bd000df45ebd3a');
+    .setEndpoint(process.env.VITE_APPWRITE_ENDPOINT || 'https://appwrite.tecnowork.mywire.org/v1')
+    .setProject(process.env.VITE_APPWRITE_PROJECT_ID || '69aed0bd000df45ebd3a');
 
 // NOTE: This usually requires a Session or API Key with sufficient permissions
 const databases = new Databases(client);
