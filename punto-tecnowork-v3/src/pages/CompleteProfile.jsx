@@ -65,10 +65,10 @@ export const CompleteProfile = () => {
     };
 
     return (
-        <div className="min-h-screen bg-dark flex items-center justify-center p-6 relative overflow-hidden">
+        <div className="min-h-screen bg-background flex items-center justify-center p-6 relative overflow-hidden">
             {/* Background Effects */}
-            <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_20%_20%,rgba(235,28,36,0.1),transparent_50%)]" />
-            <div className="absolute bottom-0 right-0 w-full h-full bg-[radial-gradient(circle_at_80%_80%,rgba(0,147,216,0.1),transparent_50%)]" />
+            <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_20%_20%,rgba(235,28,36,0.1),transparent_50%)] z-0" />
+            <div className="absolute bottom-0 right-0 w-full h-full bg-[radial-gradient(circle_at_80%_80%,rgba(0,147,216,0.1),transparent_50%)] z-0" />
             
             <div className="bg-card/40 backdrop-blur-3xl border border-white/10 w-full max-w-xl rounded-[3rem] p-12 shadow-3xl relative z-10 animate-in fade-in slide-in-from-bottom-8 duration-700">
                 <div className="text-center mb-10">
