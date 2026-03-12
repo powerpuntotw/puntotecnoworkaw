@@ -12,9 +12,30 @@ export const CompleteProfile = () => {
     const [formData, setFormData] = useState({
         full_name: dbUser?.full_name || '',
         phone: dbUser?.phone || '',
-        email: dbUser?.email || ''
+        email: dbUser?.email || '',
+        dni: dbUser?.dni || ''
     });
 
+    // Sincronizar formData cuando dbUser cargue
+    useEffect(() => {
+        if (dbUser) {
+            setFormData({
+                full_name: dbUser.full_name || '',
+                phone: dbUser.phone || '',
+                email: dbUser.email || '',
+                dni: dbUser.dni || ''
+            });
+        }
+    }, [dbUser]);
+
+    // Redirigir si el perfil ya está completo
+    useEffect(() => {
+        if (dbUser && isProfileComplete()) {
+            navigate('/dashboard');
+        }
+    }, [dbUser, navigate, isProfileComplete]);
+
+    // Guard DESPUÉS de todos los hooks
     if (!dbUser) {
         return (
             <div className="min-h-screen bg-background flex items-center justify-center">
@@ -22,12 +43,6 @@ export const CompleteProfile = () => {
             </div>
         );
     }
-
-    useEffect(() => {
-        if (isProfileComplete()) {
-            navigate('/dashboard');
-        }
-    }, [dbUser, navigate, isProfileComplete]);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -42,7 +57,8 @@ export const CompleteProfile = () => {
             toast.success("Perfil completado. ¡Bienvenido!");
             navigate('/dashboard');
         } catch (error) {
-            console.error(error);
+            console.error("Profile update error:", error);
+            toast.error("Ocurrió un error al actualizar el perfil.");
         } finally {
             setLoading(false);
         }

@@ -1,9 +1,11 @@
 import { Outlet, NavLink } from 'react-router';
 import { Home, FileText, Gift, LogOut, Ticket, Users, LayoutGrid, MapPin, BarChart3, Settings, MessageSquare, Palette, History, UserCircle, DollarSign } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useBranding } from '../context/BrandingContext';
 
 export const MainLayout = () => {
     const { user, dbUser, logout } = useAuth();
+    const { platformName, logoMain, getLogoUrl } = useBranding();
 
     const role = dbUser?.user_type || 'client';
 
@@ -45,11 +47,20 @@ export const MainLayout = () => {
             <aside className="w-20 lg:w-64 border-r border-white/5 bg-card/50 backdrop-blur-md flex flex-col justify-between py-6 transition-all">
                 <div>
                     <div className="px-4 lg:px-8 mb-10 flex items-center justify-center lg:justify-start">
-                        {/* Aquí luego irá el Main Logo que traeremos de los settings */}
-                        <div className="w-10 h-10 rounded-xl bg-gradient-hero flex items-center justify-center font-bold text-xl shadow-[0_0_15px_rgba(99,102,241,0.5)]">
-                            P
-                        </div>
-                        <span className="hidden lg:block ml-3 font-semibold text-lg tracking-wide">Tecnowork</span>
+                        {logoMain ? (
+                            <img 
+                                src={getLogoUrl(logoMain)} 
+                                className="w-10 h-10 object-contain rounded-xl shadow-[0_0_15px_rgba(99,102,241,0.3)]" 
+                                alt="Logo" 
+                            />
+                        ) : (
+                            <div className="w-10 h-10 rounded-xl bg-gradient-hero flex items-center justify-center font-bold text-xl shadow-[0_0_15px_rgba(99,102,241,0.5)]">
+                                {platformName ? platformName.charAt(0).toUpperCase() : 'P'}
+                            </div>
+                        )}
+                        <span className="hidden lg:block ml-3 font-semibold text-lg tracking-wide">
+                            {platformName || 'Tecnowork'}
+                        </span>
                     </div>
 
                     <nav className="flex flex-col gap-2 px-3">
