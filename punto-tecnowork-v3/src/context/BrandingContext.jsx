@@ -57,11 +57,8 @@ export const BrandingProvider = ({ children }) => {
     };
 
     return (
-        <AuthContext.Provider value={branding}>
-            {/* Note: I reused the name BrandingContext in the Provider but I will export it correctly */}
-            <BrandingContext.Provider value={value}>
-                {children}
-            </BrandingContext.Provider>
-        </AuthContext.Provider>
+        <BrandingContext.Provider value={value}>
+            {children}
+        </BrandingContext.Provider>
     );
 };
