@@ -3,6 +3,7 @@ import { useAuth } from './context/AuthContext';
 import { ProtectedRoute, PublicRoute } from './components/ProtectedRoutes';
 import { MainLayout } from './components/Layout';
 import { DashboardIndex } from './components/DashboardIndex';
+import { AuthCallback } from './components/AuthCallback';
 import { AdminDashboard } from './components/dashboards/AdminDashboard';
 import { AdminLocations } from './components/dashboards/AdminLocations';
 import { AdminUsers } from './components/dashboards/AdminUsers';
