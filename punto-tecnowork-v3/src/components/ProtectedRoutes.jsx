@@ -2,7 +2,7 @@ import { Outlet, Navigate } from 'react-router';
 import { useAuth } from '../context/AuthContext';
 
 export const ProtectedRoute = () => {
-    const { user, loading, dbUser, isProfileComplete } = useAuth();
+    const { user, loading, dbUser } = useAuth();
 
     if (loading || (user && !dbUser)) {
         return (
@@ -16,11 +16,7 @@ export const ProtectedRoute = () => {
         return <Navigate to="/" replace />;
     }
 
-    // Redirect to onboarding if profile is incomplete and we're not already there
-    if (!isProfileComplete() && window.location.pathname !== '/complete-profile') {
-        return <Navigate to="/complete-profile" replace />;
-    }
-
+    // Ya no redirigimos a /complete-profile — el Layout maneja el perfil incompleto
     return <Outlet />;
 };
 
