@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { avatars } from '../../lib/appwrite';
 import { User, Mail, Phone, MapPin, CreditCard, Save, Loader2, LogOut, CheckCircle, Star, Trophy, Zap, Target, Shield, Store } from 'lucide-react';
 
 export const UserProfile = () => {
@@ -41,7 +42,12 @@ export const UserProfile = () => {
     const roleLabel = { admin: 'Administrador', local: 'Local', client: 'Cliente' }[dbUser?.user_type] || 'Cliente';
     const RoleIcon = dbUser?.user_type === 'admin' ? Shield : dbUser?.user_type === 'local' ? Store : User;
 
-    const initial = (user?.name || user?.email || '?')[0].toUpperCase();
+    // Avatar: Google OAuth guarda la foto en user.prefs.avatar
+    // Fallback: Appwrite Avatars API genera imagen con iniciales
+    const googleAvatar = user?.prefs?.avatar;
+    const fallbackAvatar = avatars.getInitials(user?.name || user?.email || 'U', 96, 96).toString();
+    const avatarUrl = googleAvatar || fallbackAvatar;
+    const isPhoto = !!googleAvatar;
 
     const Field = ({ label, icon: Icon, children, accent }) => (
         <div className="space-y-2">
@@ -58,16 +64,23 @@ export const UserProfile = () => {
 
             {/* ── Hero Card ── */}
             <div className={`relative bg-gradient-to-br ${tier.bg} border border-white/10 rounded-3xl overflow-hidden shadow-2xl`}>
-                {/* Glow bg */}
                 <div className="absolute inset-0 bg-gradient-hero opacity-10" />
                 <div className="absolute -top-20 -right-20 w-64 h-64 rounded-full blur-3xl opacity-20" style={{ backgroundColor: tier.color }} />
 
                 <div className="relative z-10 p-6 sm:p-8">
                     <div className="flex items-start gap-5">
-                        {/* Avatar */}
+                        {/* Avatar — foto Google o iniciales Appwrite */}
                         <div className="relative shrink-0">
-                            <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-3xl bg-gradient-hero flex items-center justify-center text-white font-black text-3xl sm:text-4xl shadow-2xl border-4 border-white/10">
-                                {initial}
+                            <div className={`w-20 h-20 sm:w-24 sm:h-24 rounded-3xl shadow-2xl border-4 border-white/10 overflow-hidden ${!isPhoto ? 'bg-gradient-hero' : ''}`}>
+                                <img
+                                    src={avatarUrl}
+                                    alt={user?.name || 'Avatar'}
+                                    className="w-full h-full object-cover"
+                                    onError={(e) => {
+                                        // Si la foto de Google falla, cae al avatar de iniciales
+                                        e.target.src = fallbackAvatar;
+                                    }}
+                                />
                             </div>
                             {/* Tier badge */}
                             <div className="absolute -bottom-2 -right-2 w-8 h-8 rounded-xl flex items-center justify-center shadow-lg border-2 border-background" style={{ backgroundColor: tier.color }}>
@@ -123,7 +136,6 @@ export const UserProfile = () => {
 
             {/* ── Formulario ── */}
             <form onSubmit={handleUpdate} className="bg-card/50 backdrop-blur-xl border border-white/10 rounded-3xl overflow-hidden shadow-glow">
-
                 <div className="px-6 sm:px-8 py-5 border-b border-white/5 flex items-center justify-between">
                     <h2 className="text-base font-black text-white italic uppercase tracking-tight">Información Personal</h2>
                     {!profileComplete && (
@@ -132,7 +144,6 @@ export const UserProfile = () => {
                         </span>
                     )}
                 </div>
-
                 <div className="p-6 sm:p-8 space-y-5">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                         <Field label="Nombre Completo *" icon={User}>
@@ -141,19 +152,16 @@ export const UserProfile = () => {
                                 placeholder="Juan Pérez"
                                 className="w-full bg-background/50 border border-white/10 rounded-xl pl-11 pr-4 py-3 text-white focus:border-primary outline-none transition text-sm" />
                         </Field>
-
                         <Field label="Email (no editable)" icon={Mail}>
                             <input type="email" readOnly value={dbUser?.email || ''}
                                 className="w-full bg-background/20 border border-white/5 rounded-xl pl-11 pr-4 py-3 text-gray-500 cursor-not-allowed outline-none text-sm" />
                         </Field>
-
                         <Field label="Teléfono *" icon={Phone} accent="text-secondary">
                             <input type="tel" required value={formData.phone}
                                 onChange={e => setFormData({ ...formData, phone: e.target.value })}
                                 placeholder="+54 9 3704 000000"
                                 className="w-full bg-background/50 border border-white/10 rounded-xl pl-11 pr-4 py-3 text-white focus:border-secondary outline-none transition text-sm" />
                         </Field>
-
                         <Field label="DNI *" icon={CreditCard} accent="text-accent">
                             <input type="text" required maxLength={8} value={formData.dni}
                                 onChange={e => setFormData({ ...formData, dni: e.target.value.replace(/\D/g, '') })}
@@ -161,7 +169,6 @@ export const UserProfile = () => {
                                 className="w-full bg-background/50 border border-white/10 rounded-xl pl-11 pr-4 py-3 text-white focus:border-accent outline-none transition text-sm" />
                         </Field>
                     </div>
-
                     <Field label="Dirección *" icon={MapPin} accent="text-success">
                         <input type="text" required value={formData.address}
                             onChange={e => setFormData({ ...formData, address: e.target.value })}
@@ -169,7 +176,6 @@ export const UserProfile = () => {
                             className="w-full bg-background/50 border border-white/10 rounded-xl pl-11 pr-4 py-3 text-white focus:border-success outline-none transition text-sm" />
                     </Field>
                 </div>
-
                 <div className="px-6 sm:px-8 pb-6 sm:pb-8 pt-2">
                     <button type="submit" disabled={isSaving}
                         className="w-full bg-primary hover:bg-primary-glow text-white font-black py-4 rounded-2xl shadow-glow flex items-center justify-center gap-3 transition disabled:opacity-50 text-sm uppercase tracking-wider">
@@ -180,7 +186,7 @@ export const UserProfile = () => {
 
             {/* ── Cerrar sesión ── */}
             <button onClick={logout}
-                className="w-full bg-red-500/8 hover:bg-red-500/15 text-red-400 font-bold py-4 rounded-2xl border border-red-500/20 flex items-center justify-center gap-3 transition text-sm">
+                className="w-full bg-red-500/10 hover:bg-red-500/20 text-red-400 font-bold py-4 rounded-2xl border border-red-500/20 flex items-center justify-center gap-3 transition text-sm">
                 <LogOut size={18} /> Cerrar Sesión
             </button>
         </div>
