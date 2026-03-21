@@ -33,51 +33,49 @@ function App() {
         <>
             <Toaster position="top-right" />
             <Routes>
+                {/* Callback de OAuth — fuera de cualquier guard para evitar redirects prematuros */}
+                <Route path="/auth/callback" element={<AuthCallback />} />
+
                 {/* Rutas Públicas */}
                 <Route element={<PublicRoute />}>
                     <Route path="/" element={<Landing />} />
-                    {/* Callback handling */}
-                    <Route path="/auth/callback" element={<AuthCallback />} />
                 </Route>
 
                 {/* Rutas Protegidas (Requieren Sesión) */}
                 <Route element={<ProtectedRoute />}>
                     <Route path="/complete-profile" element={<CompleteProfile />} />
                     <Route element={<MainLayout />}>
-            {/* Index redirige/renderiza según el ROL (Local, Admin, Client) */}
-            <Route path="/dashboard" element={<DashboardIndex />} />
+                        <Route path="/dashboard" element={<DashboardIndex />} />
+                        <Route path="/orders/new" element={<NewOrderFlow />} />
+                        <Route path="/rewards" element={<RewardsCatalog />} />
 
-            {/* Vistas Específicas de Cliente */}
-            <Route path="/orders/new" element={<NewOrderFlow />} />
-            <Route path="/rewards" element={<RewardsCatalog />} />
+                        {/* Administrador */}
+                        <Route path="/admin/overview" element={<AdminDashboard />} />
+                        <Route path="/admin/locations" element={<AdminLocations />} />
+                        <Route path="/admin/users" element={<AdminUsers />} />
+                        <Route path="/admin/orders" element={<AdminOrders />} />
+                        <Route path="/admin/rewards" element={<AdminRewards />} />
+                        <Route path="/admin/reports" element={<AdminReports />} />
+                        <Route path="/admin/maintenance" element={<AdminMaintenance />} />
+                        <Route path="/admin/branding" element={<AdminBranding />} />
+                        <Route path="/admin/audit" element={<AdminAudit />} />
 
-            {/* Administrador */}
-            <Route path="/admin/overview" element={<AdminDashboard />} />
-            <Route path="/admin/locations" element={<AdminLocations />} />
-            <Route path="/admin/users" element={<AdminUsers />} />
-            <Route path="/admin/orders" element={<AdminOrders />} />
-            <Route path="/admin/rewards" element={<AdminRewards />} />
-            <Route path="/admin/reports" element={<AdminReports />} />
-            <Route path="/admin/maintenance" element={<AdminMaintenance />} />
-            <Route path="/admin/branding" element={<AdminBranding />} />
-            <Route path="/admin/audit" element={<AdminAudit />} />
+                        {/* Local */}
+                        <Route path="/local/overview" element={<LocalDashboard locationId={dbUser?.location_id} />} />
+                        <Route path="/local/orders" element={<LocalOrders locationId={dbUser?.location_id} />} />
+                        <Route path="/local/customers" element={<LocalCustomers locationId={dbUser?.location_id} />} />
+                        <Route path="/local/prices" element={<LocalPrices locationId={dbUser?.location_id} />} />
+                        <Route path="/local/redeems" element={<LocalRedeems locationId={dbUser?.location_id} />} />
 
-            {/* Local */}
-            <Route path="/local/overview" element={<LocalDashboard locationId={dbUser?.location_id} />} />
-            <Route path="/local/orders" element={<LocalOrders locationId={dbUser?.location_id} />} />
-            <Route path="/local/customers" element={<LocalCustomers locationId={dbUser?.location_id} />} />
-            <Route path="/local/prices" element={<LocalPrices locationId={dbUser?.location_id} />} />
-            <Route path="/local/redeems" element={<LocalRedeems locationId={dbUser?.location_id} />} />
-
-            {/* Cliente / Común */}
-            <Route path="/history" element={<ClientHistory />} />
-            <Route path="/profile" element={<UserProfile />} />
-            <Route path="/tickets" element={<TicketsSystem />} />
-          </Route>
-        </Route>
-      </Routes>
-    </>
-  );
+                        {/* Cliente / Común */}
+                        <Route path="/history" element={<ClientHistory />} />
+                        <Route path="/profile" element={<UserProfile />} />
+                        <Route path="/tickets" element={<TicketsSystem />} />
+                    </Route>
+                </Route>
+            </Routes>
+        </>
+    );
 }
 
 export default App;
