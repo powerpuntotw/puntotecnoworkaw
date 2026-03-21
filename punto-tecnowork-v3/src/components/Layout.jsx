@@ -10,11 +10,11 @@ export const MainLayout = () => {
 
     const role = dbUser?.user_type || 'client';
     const profileComplete = isProfileComplete();
+    const displayName = platformName || 'Punto Tecnowork';
+    const logoUrl = logoMain ? getLogoUrl(logoMain) : null;
 
     const getNavLinks = () => {
-        const links = [
-            { to: '/dashboard', icon: <Home size={20} />, label: 'Inicio' },
-        ];
+        const links = [{ to: '/dashboard', icon: <Home size={20} />, label: 'Inicio' }];
 
         if (role === 'client') {
             links.push({ to: '/orders/new', icon: <FileText size={20} />, label: 'Nueva Orden' });
@@ -43,26 +43,23 @@ export const MainLayout = () => {
     };
 
     const ALWAYS_ENABLED = ['/profile', '/dashboard'];
-
-    const isLinkEnabled = (to) => {
-        if (profileComplete) return true;
-        return ALWAYS_ENABLED.includes(to);
-    };
+    const isLinkEnabled = (to) => profileComplete || ALWAYS_ENABLED.includes(to);
 
     return (
         <div className="flex h-screen bg-background text-foreground overflow-hidden">
             <aside className="w-20 lg:w-64 border-r border-white/5 bg-card/50 backdrop-blur-md flex flex-col justify-between py-6 transition-all">
                 <div>
+                    {/* Logo header */}
                     <div className="px-4 lg:px-8 mb-10 flex items-center justify-center lg:justify-start">
-                        {logoMain ? (
-                            <img src={getLogoUrl(logoMain)} className="w-10 h-10 object-contain rounded-xl" alt="Logo" />
+                        {logoUrl ? (
+                            <img src={logoUrl} className="w-10 h-10 object-contain rounded-xl" alt={displayName} />
                         ) : (
-                            <div className="w-10 h-10 rounded-xl bg-gradient-hero flex items-center justify-center font-bold text-xl shadow-[0_0_15px_rgba(99,102,241,0.5)]">
-                                {platformName ? platformName.charAt(0).toUpperCase() : 'P'}
+                            <div className="w-10 h-10 rounded-xl bg-gradient-hero flex items-center justify-center font-bold text-xl shadow-[0_0_15px_rgba(235,28,36,0.5)] text-white">
+                                {displayName.charAt(0).toUpperCase()}
                             </div>
                         )}
                         <span className="hidden lg:block ml-3 font-semibold text-lg tracking-wide">
-                            {platformName || 'Tecnowork'}
+                            {displayName}
                         </span>
                     </div>
 
@@ -89,7 +86,7 @@ export const MainLayout = () => {
                                     to={link.to}
                                     className={({ isActive }) =>
                                         `flex items-center p-3 rounded-xl transition-all ${isActive
-                                            ? 'bg-primary/20 text-primary-glow shadow-[inset_0_0_12px_rgba(99,102,241,0.2)]'
+                                            ? 'bg-primary/20 text-primary-glow shadow-[inset_0_0_12px_rgba(235,28,36,0.2)]'
                                             : 'text-gray-400 hover:text-white hover:bg-white/5'
                                         }`
                                     }
@@ -104,6 +101,7 @@ export const MainLayout = () => {
                     </nav>
                 </div>
 
+                {/* Footer sidebar */}
                 <div className="px-3">
                     <button
                         onClick={logout}
@@ -112,8 +110,19 @@ export const MainLayout = () => {
                         <LogOut size={20} className="lg:mr-3 group-hover:drop-shadow-[0_0_8px_rgba(248,113,113,0.5)]" />
                         <span className="hidden lg:block font-medium">Cerrar Sesión</span>
                     </button>
-                    <div className="mt-6 px-4 hidden lg:block text-xs text-gray-500">
-                        Powered by Punto Tecnowork v3
+
+                    {/* Powered by — visible en desktop, icono en mobile */}
+                    <div className="mt-4 flex items-center justify-center lg:justify-start gap-2 px-3">
+                        {logoUrl ? (
+                            <img src={logoUrl} className="w-5 h-5 object-contain opacity-40" alt="" />
+                        ) : (
+                            <div className="w-5 h-5 rounded bg-gradient-hero opacity-40 flex items-center justify-center text-[8px] font-bold text-white">
+                                {displayName.charAt(0).toUpperCase()}
+                            </div>
+                        )}
+                        <span className="hidden lg:block text-xs text-gray-600">
+                            Powered by {displayName}
+                        </span>
                     </div>
                 </div>
             </aside>
@@ -128,6 +137,7 @@ export const MainLayout = () => {
                     </div>
                 </header>
 
+                {/* Banner perfil incompleto */}
                 {!profileComplete && (
                     <div className="mx-4 mt-4 flex items-center gap-4 bg-warning/10 border border-warning/30 rounded-2xl px-6 py-4">
                         <AlertTriangle className="text-warning shrink-0" size={22} />
