@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { account, databases } from '../lib/appwrite';
 import { OAuthProvider, Query, ID } from 'appwrite';
 import toast from 'react-hot-toast';
@@ -12,23 +12,27 @@ export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
     const [dbUser, setDbUser] = useState(null);
     const [loading, setLoading] = useState(true);
+    const isCheckingRef = useRef(false);
 
     const checkSession = async () => {
+        // Evitar llamadas concurrentes
+        if (isCheckingRef.current) return;
+        isCheckingRef.current = true;
+
         try {
             const sessionData = await account.get();
-            setUser(sessionData);
 
-            // Fetch extra profile data from our custom 'users' collection
             const dbUserData = await databases.listDocuments(
                 import.meta.env.VITE_APPWRITE_DATABASE_ID,
                 'users',
                 [Query.equal('auth_id', sessionData.$id)]
             );
 
+            let currentUserDoc = null;
+
             if (dbUserData.documents.length > 0) {
-                let currentUserDoc = dbUserData.documents[0];
-                
-                // Auto-promote the root admin account if it's not admin yet
+                currentUserDoc = dbUserData.documents[0];
+
                 if (currentUserDoc.email === 'powerpuntotw@gmail.com' && currentUserDoc.user_type !== 'admin') {
                     try {
                         currentUserDoc = await databases.updateDocument(
@@ -39,15 +43,12 @@ export const AuthProvider = ({ children }) => {
                         );
                         toast.success('¡Cuenta promovida a Administrador automáticamente!');
                     } catch (updateError) {
-                        console.error('Failed to auto-promote admin in DB, applying in-memory override:', updateError);
-                        currentUserDoc.user_type = 'admin'; // fallback if permissions prevent update
+                        console.error('Failed to auto-promote admin:', updateError);
+                        currentUserDoc.user_type = 'admin';
                     }
                 }
-                
-                setDbUser(currentUserDoc);
             } else {
-                // If it's a first-time Google login, create the DB user record
-                const newUser = await databases.createDocument(
+                currentUserDoc = await databases.createDocument(
                     import.meta.env.VITE_APPWRITE_DATABASE_ID,
                     'users',
                     ID.unique(),
@@ -58,19 +59,23 @@ export const AuthProvider = ({ children }) => {
                         user_type: sessionData.email === 'powerpuntotw@gmail.com' ? 'admin' : 'client'
                     }
                 );
-                setDbUser(newUser);
                 toast.success('¡Bienvenido! Tu perfil se ha creado exitosamente.');
             }
+
+            // Actualizar ambos estados juntos al final para evitar renders intermedios
+            setUser(sessionData);
+            setDbUser(currentUserDoc);
+
         } catch (error) {
             console.error('Session check failed:', error);
             setUser(null);
             setDbUser(null);
-            // Ignore the "missing scopes" guest log, it's normal when unauthenticated
             if (error.code !== 401) {
                 toast.error('Ocurrió un error al verificar la sesión.');
             }
         } finally {
             setLoading(false);
+            isCheckingRef.current = false;
         }
     };
 
@@ -79,7 +84,6 @@ export const AuthProvider = ({ children }) => {
     }, []);
 
     const loginWithGoogle = () => {
-        // Redirige al callback que definiremos en VITE (ej. http://localhost:5173/auth/callback)
         account.createOAuth2Session(
             OAuthProvider.Google,
             `${window.location.origin}/auth/callback`,
@@ -102,7 +106,6 @@ export const AuthProvider = ({ children }) => {
     const registerWithEmail = async (email, password, name) => {
         try {
             await account.create(ID.unique(), email, password, name);
-            // After successful registration, log them in
             await loginWithEmail(email, password);
         } catch (error) {
             console.error('Email registration failed:', error);
