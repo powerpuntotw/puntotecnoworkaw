@@ -1,15 +1,16 @@
-import { Outlet, NavLink } from 'react-router';
-import { Home, FileText, Gift, LogOut, Ticket, Users, LayoutGrid, MapPin, BarChart3, Settings, MessageSquare, Palette, History, UserCircle, DollarSign } from 'lucide-react';
+import { Outlet, NavLink, useNavigate } from 'react-router';
+import { Home, FileText, Gift, LogOut, Ticket, Users, MapPin, BarChart3, Settings, MessageSquare, Palette, History, UserCircle, DollarSign, AlertTriangle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useBranding } from '../context/BrandingContext';
 
 export const MainLayout = () => {
-    const { user, dbUser, logout } = useAuth();
+    const { user, dbUser, logout, isProfileComplete } = useAuth();
     const { platformName, logoMain, getLogoUrl } = useBranding();
+    const navigate = useNavigate();
 
     const role = dbUser?.user_type || 'client';
+    const profileComplete = isProfileComplete();
 
-    // Different navigation links based on user role
     const getNavLinks = () => {
         const links = [
             { to: '/dashboard', icon: <Home size={20} />, label: 'Inicio' },
@@ -34,25 +35,27 @@ export const MainLayout = () => {
             links.push({ to: '/admin/branding', icon: <Palette size={20} />, label: 'Branding' });
             links.push({ to: '/admin/audit', icon: <History size={20} />, label: 'Auditoría' });
         }
-        
+
         links.push({ to: '/profile', icon: <UserCircle size={20} />, label: 'Perfil' });
         links.push({ to: '/tickets', icon: <MessageSquare size={20} />, label: 'Soporte' });
 
         return links;
     };
 
+    const ALWAYS_ENABLED = ['/profile', '/dashboard'];
+
+    const isLinkEnabled = (to) => {
+        if (profileComplete) return true;
+        return ALWAYS_ENABLED.includes(to);
+    };
+
     return (
         <div className="flex h-screen bg-background text-foreground overflow-hidden">
-            {/* Sidebar minimalista con Glassmorphism */}
             <aside className="w-20 lg:w-64 border-r border-white/5 bg-card/50 backdrop-blur-md flex flex-col justify-between py-6 transition-all">
                 <div>
                     <div className="px-4 lg:px-8 mb-10 flex items-center justify-center lg:justify-start">
                         {logoMain ? (
-                            <img 
-                                src={getLogoUrl(logoMain)} 
-                                className="w-10 h-10 object-contain rounded-xl shadow-[0_0_15px_rgba(99,102,241,0.3)]" 
-                                alt="Logo" 
-                            />
+                            <img src={getLogoUrl(logoMain)} className="w-10 h-10 object-contain rounded-xl" alt="Logo" />
                         ) : (
                             <div className="w-10 h-10 rounded-xl bg-gradient-hero flex items-center justify-center font-bold text-xl shadow-[0_0_15px_rgba(99,102,241,0.5)]">
                                 {platformName ? platformName.charAt(0).toUpperCase() : 'P'}
@@ -64,23 +67,40 @@ export const MainLayout = () => {
                     </div>
 
                     <nav className="flex flex-col gap-2 px-3">
-                        {getNavLinks().map((link) => (
-                            <NavLink
-                                key={link.to}
-                                to={link.to}
-                                className={({ isActive }) =>
-                                    `flex items-center p-3 rounded-xl transition-all ${isActive
-                                        ? 'bg-primary/20 text-primary-glow shadow-[inset_0_0_12px_rgba(99,102,241,0.2)]'
-                                        : 'text-gray-400 hover:text-white hover:bg-white/5'
-                                    }`
-                                }
-                            >
-                                <div className="flex justify-center w-full lg:w-auto lg:justify-start lg:mr-3">
-                                    {link.icon}
-                                </div>
-                                <span className="hidden lg:block font-medium">{link.label}</span>
-                            </NavLink>
-                        ))}
+                        {getNavLinks().map((link) => {
+                            const enabled = isLinkEnabled(link.to);
+                            if (!enabled) {
+                                return (
+                                    <div
+                                        key={link.to}
+                                        title="Completá tu perfil para acceder"
+                                        className="flex items-center p-3 rounded-xl text-gray-600 cursor-not-allowed opacity-40 select-none"
+                                    >
+                                        <div className="flex justify-center w-full lg:w-auto lg:justify-start lg:mr-3">
+                                            {link.icon}
+                                        </div>
+                                        <span className="hidden lg:block font-medium">{link.label}</span>
+                                    </div>
+                                );
+                            }
+                            return (
+                                <NavLink
+                                    key={link.to}
+                                    to={link.to}
+                                    className={({ isActive }) =>
+                                        `flex items-center p-3 rounded-xl transition-all ${isActive
+                                            ? 'bg-primary/20 text-primary-glow shadow-[inset_0_0_12px_rgba(99,102,241,0.2)]'
+                                            : 'text-gray-400 hover:text-white hover:bg-white/5'
+                                        }`
+                                    }
+                                >
+                                    <div className="flex justify-center w-full lg:w-auto lg:justify-start lg:mr-3">
+                                        {link.icon}
+                                    </div>
+                                    <span className="hidden lg:block font-medium">{link.label}</span>
+                                </NavLink>
+                            );
+                        })}
                     </nav>
                 </div>
 
@@ -98,9 +118,7 @@ export const MainLayout = () => {
                 </div>
             </aside>
 
-            {/* Contenido Principal */}
             <main className="flex-1 flex flex-col h-full overflow-hidden">
-                {/* Header Superior */}
                 <header className="h-16 border-b border-white/5 bg-background/80 backdrop-blur flex items-center justify-end px-8">
                     <div className="flex items-center gap-4 border border-white/10 px-4 py-1.5 rounded-full bg-card">
                         <span className="text-sm font-medium text-gray-300">Hola, {user?.name || 'Usuario'}</span>
@@ -110,7 +128,22 @@ export const MainLayout = () => {
                     </div>
                 </header>
 
-                {/* Área Scrollable del Outlet */}
+                {!profileComplete && (
+                    <div className="mx-4 mt-4 flex items-center gap-4 bg-warning/10 border border-warning/30 rounded-2xl px-6 py-4">
+                        <AlertTriangle className="text-warning shrink-0" size={22} />
+                        <div className="flex-1">
+                            <p className="text-warning font-bold text-sm">Completá tu perfil para usar la aplicación</p>
+                            <p className="text-warning/70 text-xs mt-0.5">Necesitamos tus datos para procesar pedidos. El resto de las funciones estarán disponibles una vez que completes la información.</p>
+                        </div>
+                        <button
+                            onClick={() => navigate('/profile')}
+                            className="shrink-0 bg-warning text-black font-bold text-xs px-4 py-2 rounded-xl hover:bg-warning/80 transition"
+                        >
+                            Completar ahora
+                        </button>
+                    </div>
+                )}
+
                 <div className="flex-1 overflow-y-auto p-4 md:p-8">
                     <Outlet />
                 </div>
