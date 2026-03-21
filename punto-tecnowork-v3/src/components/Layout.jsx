@@ -6,7 +6,7 @@ import { useTheme } from '../context/ThemeContext';
 
 export const MainLayout = () => {
     const { user, dbUser, logout, isProfileComplete } = useAuth();
-    const { platformName, logoMain, getLogoUrl } = useBranding();
+    const { platformName, logoMain, logoLight, logoDark, getLogoUrl } = useBranding();
     const { isDark, toggleTheme } = useTheme();
     const navigate = useNavigate();
 
@@ -14,6 +14,9 @@ export const MainLayout = () => {
     const profileComplete = isProfileComplete();
     const displayName = platformName || 'Punto Tecnowork';
     const logoUrl = logoMain ? getLogoUrl(logoMain) : null;
+    // Logos para el footer "Powered by" — igual que en el Landing
+    const footerLogo1Url = logoLight ? getLogoUrl(logoLight) : null;
+    const footerLogo2Url = logoDark ? getLogoUrl(logoDark) : null;
 
     const getNavLinks = () => {
         const links = [{ to: '/dashboard', icon: <Home size={20} />, label: 'Inicio' }];
@@ -96,22 +99,35 @@ export const MainLayout = () => {
                         <LogOut size={20} className="lg:mr-3 group-hover:drop-shadow-[0_0_8px_rgba(248,113,113,0.5)]" />
                         <span className="hidden lg:block font-medium">Cerrar Sesión</span>
                     </button>
-                    <div className="mt-4 flex items-center justify-center lg:justify-start gap-2 px-3">
-                        {logoUrl ? (
-                            <img src={logoUrl} className="w-5 h-5 object-contain opacity-40" alt="" />
-                        ) : (
-                            <div className="w-5 h-5 rounded bg-gradient-hero opacity-40 flex items-center justify-center text-[8px] font-bold text-white">
-                                {displayName.charAt(0).toUpperCase()}
-                            </div>
+
+                    {/* Powered by — mismos logos que el footer del Landing */}
+                    <div className="mt-4 px-2 flex items-center justify-center lg:justify-start gap-2">
+                        <span className="hidden lg:block text-xs text-gray-600 mr-1">Powered by</span>
+                        {footerLogo1Url ? (
+                            <img src={footerLogo1Url} alt="" className="h-5 w-auto object-contain opacity-50 hover:opacity-100 transition" />
+                        ) : null}
+                        {footerLogo2Url ? (
+                            <img src={footerLogo2Url} alt="" className="h-5 w-auto object-contain opacity-50 hover:opacity-100 transition" />
+                        ) : null}
+                        {/* Fallback si no hay logos secundarios */}
+                        {!footerLogo1Url && !footerLogo2Url && (
+                            <>
+                                {logoUrl ? (
+                                    <img src={logoUrl} className="w-5 h-5 object-contain opacity-40" alt="" />
+                                ) : (
+                                    <div className="w-5 h-5 rounded bg-gradient-hero opacity-40 flex items-center justify-center text-[8px] font-bold text-white">
+                                        {displayName.charAt(0).toUpperCase()}
+                                    </div>
+                                )}
+                                <span className="hidden lg:block text-xs text-gray-600">{displayName}</span>
+                            </>
                         )}
-                        <span className="hidden lg:block text-xs text-gray-600">Powered by {displayName}</span>
                     </div>
                 </div>
             </aside>
 
             <main className="flex-1 flex flex-col h-full overflow-hidden">
                 <header className="h-16 border-b border-white/5 bg-background/80 backdrop-blur flex items-center justify-end gap-3 px-8">
-                    {/* Botón toggle claro/oscuro */}
                     <button
                         onClick={toggleTheme}
                         title={isDark ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
@@ -119,7 +135,6 @@ export const MainLayout = () => {
                     >
                         {isDark ? <Sun size={16} /> : <Moon size={16} />}
                     </button>
-
                     <div className="flex items-center gap-4 border border-white/10 px-4 py-1.5 rounded-full bg-card">
                         <span className="text-sm font-medium text-gray-300">Hola, {user?.name || 'Usuario'}</span>
                         <div className="w-8 h-8 rounded-full bg-primary/30 border border-primary/50 flex items-center justify-center text-primary-glow font-bold">
