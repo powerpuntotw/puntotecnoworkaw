@@ -15,7 +15,6 @@ export const AuthProvider = ({ children }) => {
     const isCheckingRef = useRef(false);
 
     const checkSession = async () => {
-        // Evitar llamadas concurrentes
         if (isCheckingRef.current) return;
         isCheckingRef.current = true;
 
@@ -62,7 +61,6 @@ export const AuthProvider = ({ children }) => {
                 toast.success('¡Bienvenido! Tu perfil se ha creado exitosamente.');
             }
 
-            // Actualizar ambos estados juntos al final para evitar renders intermedios
             setUser(sessionData);
             setDbUser(currentUserDoc);
 
@@ -144,7 +142,7 @@ export const AuthProvider = ({ children }) => {
 
     const isProfileComplete = () => {
         if (!dbUser) return false;
-        return !!(dbUser.full_name && dbUser.email && dbUser.phone);
+        return !!(dbUser.full_name && dbUser.email && dbUser.phone && dbUser.dni && dbUser.address);
     };
 
     const value = {
