@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router';
 import { account, databases } from '../lib/appwrite';
 import { Query, ID } from 'appwrite';
 import toast from 'react-hot-toast';
+import { markSessionAlive } from '../lib/sessionStorage';
 
 // AuthCallback maneja el OAuth sin depender del AuthContext
 // para evitar conflictos con el isCheckingRef del contexto
@@ -28,7 +29,6 @@ export const AuthCallback = () => {
                 );
 
                 if (dbUserData.documents.length === 0) {
-                    // Usuario nuevo — crear registro
                     await databases.createDocument(
                         import.meta.env.VITE_APPWRITE_DATABASE_ID,
                         'users',
@@ -43,7 +43,10 @@ export const AuthCallback = () => {
                     toast.success('¡Bienvenido! Tu perfil se ha creado exitosamente.');
                 }
 
-                // Navegar al dashboard — AuthContext va a leer la sesión al montar
+                // CLAVE: marcar la sesión como activa ANTES de navegar al dashboard.
+                // Así checkSession en AuthContext no lo interpreta como un cierre de navegador.
+                markSessionAlive();
+
                 navigate('/dashboard', { replace: true });
 
             } catch (error) {
