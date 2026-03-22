@@ -2,12 +2,14 @@ import { useState, useEffect } from 'react';
 import { databases } from '../../lib/appwrite';
 import { Query } from 'appwrite';
 import toast from 'react-hot-toast';
-import { Shield, User, Store, Loader2 } from 'lucide-react';
+import { Shield, User, Store, Loader2, Trash2 } from 'lucide-react';
 
 export const AdminUsers = () => {
     const [users, setUsers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [updatingId, setUpdatingId] = useState(null);
+    const [deletingId, setDeletingId] = useState(null);
+
     const ROLES = [
         { id: 'client', label: 'Cliente' },
         { id: 'local', label: 'Local' },
@@ -17,7 +19,10 @@ export const AdminUsers = () => {
     const fetchUsers = async () => {
         try {
             setLoading(true);
-            const res = await databases.listDocuments(import.meta.env.VITE_APPWRITE_DATABASE_ID, 'users', [Query.limit(100), Query.orderDesc('$createdAt')]);
+            const res = await databases.listDocuments(
+                import.meta.env.VITE_APPWRITE_DATABASE_ID, 'users',
+                [Query.limit(100), Query.orderDesc('$createdAt')]
+            );
             setUsers(res.documents);
         } catch { toast.error('Error al cargar usuarios.'); }
         finally { setLoading(false); }
@@ -28,11 +33,27 @@ export const AdminUsers = () => {
     const handleRoleChange = async (userId, newRole) => {
         try {
             setUpdatingId(userId);
-            await databases.updateDocument(import.meta.env.VITE_APPWRITE_DATABASE_ID, 'users', userId, { user_type: newRole });
+            await databases.updateDocument(
+                import.meta.env.VITE_APPWRITE_DATABASE_ID, 'users', userId,
+                { user_type: newRole }
+            );
             setUsers(users.map(u => u.$id === userId ? { ...u, user_type: newRole } : u));
             toast.success('Rol actualizado.');
         } catch { toast.error('Error al actualizar.'); }
         finally { setUpdatingId(null); }
+    };
+
+    const handleDelete = async (userId, name) => {
+        if (!window.confirm(`¿Eliminar a "${name}" de la base de datos?\n\nNota: esto elimina el registro de la app pero no la cuenta de Google.`)) return;
+        try {
+            setDeletingId(userId);
+            await databases.deleteDocument(
+                import.meta.env.VITE_APPWRITE_DATABASE_ID, 'users', userId
+            );
+            setUsers(users.filter(u => u.$id !== userId));
+            toast.success('Usuario eliminado.');
+        } catch { toast.error('Error al eliminar.'); }
+        finally { setDeletingId(null); }
     };
 
     const roleStyle = (t) => {
@@ -68,16 +89,22 @@ export const AdminUsers = () => {
                                         </div>
                                     </div>
                                     <div className="flex items-center gap-2">
-                                        <select disabled={updatingId === u.$id} value={u.user_type || 'client'} onChange={(e) => handleRoleChange(u.$id, e.target.value)}
+                                        <select disabled={updatingId === u.$id} value={u.user_type || 'client'}
+                                            onChange={(e) => handleRoleChange(u.$id, e.target.value)}
                                             className="flex-1 bg-background border border-white/10 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-primary disabled:opacity-50">
                                             {ROLES.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
                                         </select>
-                                        {updatingId === u.$id && <Loader2 size={16} className="animate-spin text-primary shrink-0" />}
+                                        <button onClick={() => handleDelete(u.$id, u.full_name || u.email)}
+                                            disabled={deletingId === u.$id}
+                                            className="p-2 text-red-400 hover:bg-red-400/10 rounded-lg transition disabled:opacity-50 shrink-0">
+                                            {deletingId === u.$id ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                                        </button>
                                     </div>
                                 </div>
                             ))}
                             {users.length === 0 && <div className="py-8 text-center text-gray-400">No se encontraron usuarios</div>}
                         </div>
+
                         {/* Desktop: tabla */}
                         <div className="hidden sm:block overflow-x-auto">
                             <table className="w-full text-left">
@@ -88,6 +115,7 @@ export const AdminUsers = () => {
                                         <th className="py-4 px-4 font-medium hidden lg:table-cell">Registro</th>
                                         <th className="py-4 px-4 font-medium">Rol</th>
                                         <th className="py-4 px-4 font-medium text-right">Cambiar</th>
+                                        <th className="py-4 px-4 font-medium text-right">Eliminar</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-white/5">
@@ -104,16 +132,24 @@ export const AdminUsers = () => {
                                             </td>
                                             <td className="py-4 px-4 text-right">
                                                 <div className="flex items-center justify-end gap-2">
-                                                    <select disabled={updatingId === u.$id} value={u.user_type || 'client'} onChange={(e) => handleRoleChange(u.$id, e.target.value)}
+                                                    <select disabled={updatingId === u.$id} value={u.user_type || 'client'}
+                                                        onChange={(e) => handleRoleChange(u.$id, e.target.value)}
                                                         className="bg-background border border-white/10 rounded-lg px-3 py-1.5 text-sm text-gray-200 focus:outline-none focus:border-primary appearance-none disabled:opacity-50">
                                                         {ROLES.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
                                                     </select>
                                                     {updatingId === u.$id && <Loader2 size={16} className="animate-spin text-primary" />}
                                                 </div>
                                             </td>
+                                            <td className="py-4 px-4 text-right">
+                                                <button onClick={() => handleDelete(u.$id, u.full_name || u.email)}
+                                                    disabled={deletingId === u.$id}
+                                                    className="p-2 text-red-400 hover:bg-red-400/10 rounded-lg transition disabled:opacity-50">
+                                                    {deletingId === u.$id ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                                                </button>
+                                            </td>
                                         </tr>
                                     ))}
-                                    {users.length === 0 && <tr><td colSpan="5" className="py-8 text-center text-gray-400">No se encontraron usuarios</td></tr>}
+                                    {users.length === 0 && <tr><td colSpan="6" className="py-8 text-center text-gray-400">No se encontraron usuarios</td></tr>}
                                 </tbody>
                             </table>
                         </div>
