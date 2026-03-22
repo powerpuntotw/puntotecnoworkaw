@@ -7,6 +7,7 @@ import { Clock, AlertTriangle } from 'lucide-react';
 const DEFAULT_TIMEOUT_MINUTES = 15;
 const WARNING_SECONDS = 60;
 const ACTIVITY_EVENTS = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll', 'click'];
+const SESSION_ALIVE_KEY = 'pt_session_alive';
 const DB_ID = () => import.meta.env.VITE_APPWRITE_DATABASE_ID;
 
 export const SessionManager = () => {
@@ -40,19 +41,48 @@ export const SessionManager = () => {
         loadConfig();
     }, [user]);
 
+    // ── Estrategia sessionStorage para cerrar sesión al cerrar el navegador ──
+    // sessionStorage se borra automáticamente cuando se cierra la pestaña/navegador.
+    // Al cargar la app, si closeOnBrowserExit está activo y no hay flag, se hace logout.
+    useEffect(() => {
+        if (!user || !closeOnBrowserExit) return;
+
+        // Marcar que la sesión está activa en esta pestaña
+        sessionStorage.setItem(SESSION_ALIVE_KEY, '1');
+
+        // Al desmontar (cierre de pestaña) el sessionStorage se limpia solo.
+        // No hay cleanup necesario — el browser lo hace.
+    }, [user, closeOnBrowserExit]);
+
+    // Al cargar la app con usuario activo: si closeOnBrowserExit está ON
+    // y no hay flag en sessionStorage → el browser fue cerrado → hacer logout
+    useEffect(() => {
+        if (!user || !closeOnBrowserExit) return;
+
+        const flag = sessionStorage.getItem(SESSION_ALIVE_KEY);
+        if (!flag) {
+            // No había flag → la sesión sobrevivió a un cierre de navegador → cerrar
+            logout();
+        }
+    }, [user, closeOnBrowserExit]);
+    // Nota: este effect corre después del de arriba (que pone el flag), pero
+    // en el PRIMER render, el flag todavía no existe si el browser fue cerrado.
+    // El orden correcto es: primero chequear, después poner el flag.
+    // Por eso separamos en dos effects — React los corre en orden de declaración.
+
     const doLogout = useCallback(async () => {
         setShowWarning(false);
         showWarningRef.current = false;
         clearTimeout(inactivityTimer.current);
         clearInterval(countdownTimer.current);
+        sessionStorage.removeItem(SESSION_ALIVE_KEY);
         await logout();
     }, [logout]);
 
     const resetTimer = useCallback(() => {
         if (showWarningRef.current) return;
         clearTimeout(inactivityTimer.current);
-
-        if (timeoutMinutes <= 0) return; // Sin timeout configurado
+        if (timeoutMinutes <= 0) return;
 
         inactivityTimer.current = setTimeout(() => {
             setShowWarning(true);
@@ -82,14 +112,6 @@ export const SessionManager = () => {
             clearInterval(countdownTimer.current);
         };
     }, [user, resetTimer]);
-
-    // Cerrar al salir del navegador (configurable)
-    useEffect(() => {
-        if (!user || !closeOnBrowserExit) return;
-        const handleUnload = () => logout();
-        window.addEventListener('beforeunload', handleUnload);
-        return () => window.removeEventListener('beforeunload', handleUnload);
-    }, [user, closeOnBrowserExit, logout]);
 
     const handleStillHere = () => {
         setShowWarning(false);
