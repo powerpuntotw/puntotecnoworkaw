@@ -2,16 +2,15 @@ import { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { account, databases } from '../lib/appwrite';
 import { OAuthProvider, Query, ID } from 'appwrite';
 import toast from 'react-hot-toast';
+import { checkBrowserExitLogout, markSessionAlive, clearSessionAlive } from '../components/SessionManager';
 
 const AuthContext = createContext();
 
 export const useAuth = () => useContext(AuthContext);
 
-// Intenta obtener el avatar de Google usando el providerAccessToken de la sesión
 const fetchGoogleAvatar = async () => {
     try {
         const session = await account.getSession('current');
-        // Solo intentar si es una sesión de Google con token válido
         if (session.provider !== 'google' || !session.providerAccessToken) return null;
         const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
             headers: { Authorization: `Bearer ${session.providerAccessToken}` }
@@ -22,6 +21,23 @@ const fetchGoogleAvatar = async () => {
     } catch {
         return null;
     }
+};
+
+// Obtiene la configuración de sesión desde Appwrite (si existe)
+const fetchSessionConfig = async () => {
+    try {
+        const res = await databases.listDocuments(
+            import.meta.env.VITE_APPWRITE_DATABASE_ID,
+            'system_config',
+            [Query.equal('type', 'session_config')]
+        );
+        if (res.documents.length > 0) {
+            return JSON.parse(res.documents[0].data);
+        }
+    } catch {
+        // Si no existe config, usar defaults
+    }
+    return { close_on_browser_exit: true }; // default activo
 };
 
 // eslint-disable-next-line react/prop-types
@@ -38,17 +54,35 @@ export const AuthProvider = ({ children }) => {
         try {
             const sessionData = await account.get();
 
-            // Si no tiene avatar guardado en prefs, intentar obtenerlo de Google
+            // ── Chequeo de cierre de navegador ──────────────────────────────
+            // sessionStorage se vacía al cerrar tab/browser.
+            // Si hay sesión activa en Appwrite pero no hay flag → el browser
+            // fue cerrado con la sesión activa → hay que cerrarla.
+            const sessionConfig = await fetchSessionConfig();
+            if (sessionConfig.close_on_browser_exit !== false) {
+                const shouldLogout = checkBrowserExitLogout();
+                if (shouldLogout) {
+                    // Eliminar la sesión en Appwrite y salir
+                    try { await account.deleteSession('current'); } catch { /* ignorar */ }
+                    setUser(null);
+                    setDbUser(null);
+                    setLoading(false);
+                    isCheckingRef.current = false;
+                    return;
+                }
+            }
+            // Marcar sesión activa para esta pestaña
+            markSessionAlive();
+            // ────────────────────────────────────────────────────────────────
+
+            // Intentar obtener avatar de Google si no tiene
             if (!sessionData.prefs?.avatar) {
                 const googlePicture = await fetchGoogleAvatar();
                 if (googlePicture) {
                     try {
                         await account.updatePrefs({ ...sessionData.prefs, avatar: googlePicture });
-                        // Recargar para tener prefs actualizados
                         sessionData.prefs = { ...sessionData.prefs, avatar: googlePicture };
-                    } catch {
-                        // Si falla actualizar prefs, seguimos sin avatar
-                    }
+                    } catch { /* ignorar */ }
                 }
             }
 
@@ -62,7 +96,6 @@ export const AuthProvider = ({ children }) => {
 
             if (dbUserData.documents.length > 0) {
                 currentUserDoc = dbUserData.documents[0];
-
                 if (currentUserDoc.email === 'powerpuntotw@gmail.com' && currentUserDoc.user_type !== 'admin') {
                     try {
                         currentUserDoc = await databases.updateDocument(
@@ -72,8 +105,7 @@ export const AuthProvider = ({ children }) => {
                             { user_type: 'admin' }
                         );
                         toast.success('¡Cuenta promovida a Administrador automáticamente!');
-                    } catch (updateError) {
-                        console.error('Failed to auto-promote admin:', updateError);
+                    } catch {
                         currentUserDoc.user_type = 'admin';
                     }
                 }
@@ -96,7 +128,6 @@ export const AuthProvider = ({ children }) => {
             setDbUser(currentUserDoc);
 
         } catch (error) {
-            console.error('Session check failed:', error);
             setUser(null);
             setDbUser(null);
             if (error.code !== 401) {
@@ -126,7 +157,6 @@ export const AuthProvider = ({ children }) => {
             await checkSession();
             toast.success('¡Sesión iniciada correctamente!');
         } catch (error) {
-            console.error('Email login failed:', error);
             toast.error('Credenciales inválidas o error de conexión.');
             throw error;
         }
@@ -137,7 +167,6 @@ export const AuthProvider = ({ children }) => {
             await account.create(ID.unique(), email, password, name);
             await loginWithEmail(email, password);
         } catch (error) {
-            console.error('Email registration failed:', error);
             toast.error(error.message || 'Error al registrar usuario.');
             throw error;
         }
@@ -145,6 +174,7 @@ export const AuthProvider = ({ children }) => {
 
     const logout = async () => {
         try {
+            clearSessionAlive();
             await account.deleteSession('current');
             setUser(null);
             setDbUser(null);
@@ -165,7 +195,6 @@ export const AuthProvider = ({ children }) => {
             toast.success('Perfil actualizado correctamente');
             return updated;
         } catch (error) {
-            console.error('Profile update failed:', error);
             toast.error('Error al actualizar el perfil');
             throw error;
         }
@@ -177,16 +206,10 @@ export const AuthProvider = ({ children }) => {
     };
 
     const value = {
-        user,
-        dbUser,
-        loading,
-        isProfileComplete,
-        updateProfile,
-        loginWithGoogle,
-        loginWithEmail,
-        registerWithEmail,
-        logout,
-        checkSession
+        user, dbUser, loading,
+        isProfileComplete, updateProfile,
+        loginWithGoogle, loginWithEmail, registerWithEmail,
+        logout, checkSession
     };
 
     return (
