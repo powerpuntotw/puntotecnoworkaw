@@ -81,29 +81,33 @@ export const MainLayout = () => {
             <SessionManager />
 
             {/* ====== SIDEBAR — solo visible en lg+ ====== */}
-            <aside className="hidden lg:flex w-64 border-r border-white/5 bg-card/50 backdrop-blur-md flex-col justify-between py-6 transition-all shrink-0">
-                <div>
-                    <div className="px-8 mb-10 flex items-center">
-                        {logoUrl ? (
-                            <img src={logoUrl} className="w-10 h-10 object-contain rounded-xl" alt={displayName} />
-                        ) : (
-                            <div className="w-10 h-10 rounded-xl bg-gradient-hero flex items-center justify-center font-bold text-xl text-white">
-                                {displayName.charAt(0).toUpperCase()}
-                            </div>
-                        )}
-                        <span className="ml-3 font-semibold text-lg tracking-wide">{displayName}</span>
-                    </div>
-                    <nav className="flex flex-col gap-1 px-3">
-                        {allLinks.map(link => <NavItem key={link.to} link={link} />)}
-                    </nav>
+            {/* FIX: flex-col con overflow oculto en el aside, nav con flex-1 + overflow-y-auto */}
+            <aside className="hidden lg:flex w-64 border-r border-white/5 bg-card/50 backdrop-blur-md flex-col py-6 transition-all shrink-0">
+                {/* Logo — altura fija */}
+                <div className="px-8 mb-6 flex items-center shrink-0">
+                    {logoUrl ? (
+                        <img src={logoUrl} className="w-10 h-10 object-contain rounded-xl" alt={displayName} />
+                    ) : (
+                        <div className="w-10 h-10 rounded-xl bg-gradient-hero flex items-center justify-center font-bold text-xl text-white">
+                            {displayName.charAt(0).toUpperCase()}
+                        </div>
+                    )}
+                    <span className="ml-3 font-semibold text-lg tracking-wide">{displayName}</span>
                 </div>
-                <div className="px-3">
+
+                {/* Nav — ocupa el espacio disponible y hace scroll si es necesario */}
+                <nav className="flex-1 min-h-0 overflow-y-auto px-3 space-y-0.5 scrollbar-thin">
+                    {allLinks.map(link => <NavItem key={link.to} link={link} />)}
+                </nav>
+
+                {/* Footer — altura fija, siempre visible */}
+                <div className="px-3 pt-4 border-t border-white/5 shrink-0">
                     <button onClick={logout}
                         className="w-full flex items-center gap-3 p-3 rounded-xl text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-all">
                         <LogOut size={20} />
                         <span className="font-medium">Cerrar Sesión</span>
                     </button>
-                    <div className="mt-4 px-2 flex items-center gap-2">
+                    <div className="mt-3 px-2 flex items-center gap-2">
                         <span className="text-xs text-gray-600 mr-1">Powered by</span>
                         {footerLogo1Url && <img src={footerLogo1Url} alt="" className="h-5 w-auto object-contain opacity-50 hover:opacity-100 transition" />}
                         {footerLogo2Url && <img src={footerLogo2Url} alt="" className="h-5 w-auto object-contain opacity-50 hover:opacity-100 transition" />}
@@ -169,7 +173,7 @@ export const MainLayout = () => {
                 <div className="lg:hidden fixed inset-0 z-50 flex">
                     <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setMobileMenuOpen(false)} />
                     <div className="relative w-72 max-w-[85vw] bg-background border-r border-white/10 flex flex-col h-full z-10 shadow-2xl">
-                        <div className="flex items-center justify-between px-5 py-4 border-b border-white/5">
+                        <div className="flex items-center justify-between px-5 py-4 border-b border-white/5 shrink-0">
                             <div className="flex items-center gap-3">
                                 {logoUrl ? (
                                     <img src={logoUrl} className="w-8 h-8 object-contain rounded-lg" alt="" />
@@ -184,12 +188,12 @@ export const MainLayout = () => {
                                 <X size={20} />
                             </button>
                         </div>
-                        <nav className="flex-1 overflow-y-auto p-3 space-y-1">
+                        <nav className="flex-1 min-h-0 overflow-y-auto p-3 space-y-1">
                             {allLinks.map(link => (
                                 <NavItem key={link.to} link={link} onClick={() => setMobileMenuOpen(false)} />
                             ))}
                         </nav>
-                        <div className="p-3 border-t border-white/5 space-y-3">
+                        <div className="p-3 border-t border-white/5 space-y-3 shrink-0">
                             <button onClick={() => { logout(); setMobileMenuOpen(false); }}
                                 className="w-full flex items-center gap-3 p-3 rounded-xl text-red-400 hover:bg-red-500/10 transition">
                                 <LogOut size={20} />
