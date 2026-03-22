@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useBranding } from '../context/BrandingContext';
 import { useTheme } from '../context/ThemeContext';
+import { SessionManager } from './SessionManager';
 
 export const MainLayout = () => {
     const { user, dbUser, logout, isProfileComplete } = useAuth();
@@ -48,7 +49,6 @@ export const MainLayout = () => {
     const ALWAYS_ENABLED = ['/profile', '/dashboard'];
     const isLinkEnabled = (to) => profileComplete || ALWAYS_ENABLED.includes(to);
     const allLinks = getNavLinks();
-    // Bottom nav: primeras 4 + perfil
     const bottomLinks = [...allLinks.slice(0, 4), allLinks.find(l => l.to === '/profile')].filter(Boolean);
 
     const NavItem = ({ link, onClick }) => {
@@ -77,6 +77,9 @@ export const MainLayout = () => {
     return (
         <div className="flex h-screen bg-background text-foreground overflow-hidden">
 
+            {/* SessionManager — gestiona timeout e inactividad */}
+            <SessionManager />
+
             {/* ====== SIDEBAR — solo visible en lg+ ====== */}
             <aside className="hidden lg:flex w-64 border-r border-white/5 bg-card/50 backdrop-blur-md flex-col justify-between py-6 transition-all shrink-0">
                 <div>
@@ -104,27 +107,18 @@ export const MainLayout = () => {
                         <span className="text-xs text-gray-600 mr-1">Powered by</span>
                         {footerLogo1Url && <img src={footerLogo1Url} alt="" className="h-5 w-auto object-contain opacity-50 hover:opacity-100 transition" />}
                         {footerLogo2Url && <img src={footerLogo2Url} alt="" className="h-5 w-auto object-contain opacity-50 hover:opacity-100 transition" />}
-                        {!footerLogo1Url && !footerLogo2Url && (
-                            <span className="text-xs text-gray-600">{displayName}</span>
-                        )}
+                        {!footerLogo1Url && !footerLogo2Url && <span className="text-xs text-gray-600">{displayName}</span>}
                     </div>
                 </div>
             </aside>
 
             {/* ====== MAIN ====== */}
             <main className="flex-1 flex flex-col h-full overflow-hidden min-w-0">
-
-                {/* Header */}
                 <header className="h-14 sm:h-16 border-b border-white/5 bg-background/80 backdrop-blur flex items-center justify-between gap-3 px-4 sm:px-6 shrink-0">
-                    {/* Hamburger — solo mobile */}
-                    <button
-                        onClick={() => setMobileMenuOpen(true)}
-                        className="lg:hidden w-9 h-9 flex items-center justify-center rounded-xl border border-white/10 bg-white/5 text-gray-400"
-                    >
+                    <button onClick={() => setMobileMenuOpen(true)}
+                        className="lg:hidden w-9 h-9 flex items-center justify-center rounded-xl border border-white/10 bg-white/5 text-gray-400">
                         <Menu size={18} />
                     </button>
-
-                    {/* Logo mobile */}
                     <div className="lg:hidden flex items-center gap-2">
                         {logoUrl ? (
                             <img src={logoUrl} className="w-7 h-7 object-contain rounded-lg" alt="" />
@@ -135,7 +129,6 @@ export const MainLayout = () => {
                         )}
                         <span className="font-semibold text-sm">{displayName}</span>
                     </div>
-
                     <div className="flex items-center gap-2 sm:gap-3 ml-auto">
                         <button onClick={toggleTheme} title={isDark ? 'Modo claro' : 'Modo oscuro'}
                             className="w-9 h-9 flex items-center justify-center rounded-xl border border-white/10 bg-white/5 hover:bg-primary/10 hover:border-primary/30 transition text-gray-400 hover:text-primary">
@@ -152,7 +145,6 @@ export const MainLayout = () => {
                     </div>
                 </header>
 
-                {/* Banner perfil incompleto */}
                 {!profileComplete && (
                     <div className="mx-3 sm:mx-4 mt-3 flex items-start sm:items-center gap-3 bg-warning/10 border border-warning/30 rounded-2xl px-4 sm:px-6 py-3 sm:py-4">
                         <AlertTriangle className="text-warning shrink-0 mt-0.5 sm:mt-0" size={20} />
@@ -167,13 +159,12 @@ export const MainLayout = () => {
                     </div>
                 )}
 
-                {/* Contenido scrollable — padding bottom para bottom nav en mobile */}
                 <div className="flex-1 overflow-y-auto p-3 sm:p-5 lg:p-8 pb-20 lg:pb-8">
                     <Outlet />
                 </div>
             </main>
 
-            {/* ====== DRAWER MOBILE — menú completo ====== */}
+            {/* ====== DRAWER MOBILE ====== */}
             {mobileMenuOpen && (
                 <div className="lg:hidden fixed inset-0 z-50 flex">
                     <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setMobileMenuOpen(false)} />
@@ -215,7 +206,7 @@ export const MainLayout = () => {
                 </div>
             )}
 
-            {/* ====== BOTTOM NAV — solo mobile, primeras 4 rutas + perfil ====== */}
+            {/* ====== BOTTOM NAV — solo mobile ====== */}
             <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-background/95 backdrop-blur-md border-t border-white/10 flex items-center justify-around px-2 py-2">
                 {bottomLinks.map(link => {
                     const enabled = isLinkEnabled(link.to);
