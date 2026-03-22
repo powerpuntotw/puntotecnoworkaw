@@ -1,11 +1,13 @@
 import { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router';
-import { useAuth } from '../context/AuthContext';
-import { markAlive } from '../lib/sessionStorage';
+import { account, databases } from '../lib/appwrite';
+import { Query, ID } from 'appwrite';
+import toast from 'react-hot-toast';
 
+// AuthCallback maneja el OAuth sin depender del AuthContext
+// para evitar conflictos con el isCheckingRef del contexto
 export const AuthCallback = () => {
     const navigate = useNavigate();
-    const { checkSession } = useAuth();
     const didRun = useRef(false);
 
     useEffect(() => {
@@ -14,14 +16,39 @@ export const AuthCallback = () => {
 
         const processLogin = async () => {
             try {
-                await new Promise(resolve => setTimeout(resolve, 500));
-                // Marcar sesión activa ANTES de checkSession
-                markAlive();
-                await checkSession();
-                await new Promise(resolve => setTimeout(resolve, 200));
+                // Esperar a que Appwrite SDK procese las cookies del OAuth
+                await new Promise(resolve => setTimeout(resolve, 800));
+
+                const sessionData = await account.get();
+
+                const dbUserData = await databases.listDocuments(
+                    import.meta.env.VITE_APPWRITE_DATABASE_ID,
+                    'users',
+                    [Query.equal('auth_id', sessionData.$id)]
+                );
+
+                if (dbUserData.documents.length === 0) {
+                    // Usuario nuevo — crear registro
+                    await databases.createDocument(
+                        import.meta.env.VITE_APPWRITE_DATABASE_ID,
+                        'users',
+                        ID.unique(),
+                        {
+                            auth_id: sessionData.$id,
+                            full_name: sessionData.name || 'Nuevo Usuario',
+                            email: sessionData.email || '',
+                            user_type: sessionData.email === 'powerpuntotw@gmail.com' ? 'admin' : 'client'
+                        }
+                    );
+                    toast.success('¡Bienvenido! Tu perfil se ha creado exitosamente.');
+                }
+
+                // Navegar al dashboard — AuthContext va a leer la sesión al montar
                 navigate('/dashboard', { replace: true });
+
             } catch (error) {
-                console.error("Error processing Auth callback:", error);
+                console.error("Error en OAuth callback:", error);
+                toast.error("Error al iniciar sesión. Intentá de nuevo.");
                 navigate('/', { replace: true });
             }
         };
