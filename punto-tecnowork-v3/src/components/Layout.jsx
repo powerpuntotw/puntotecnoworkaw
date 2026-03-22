@@ -4,7 +4,6 @@ import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useBranding } from '../context/BrandingContext';
 import { useTheme } from '../context/ThemeContext';
-import { SessionManager } from './SessionManager';
 
 export const MainLayout = () => {
     const { user, dbUser, logout, isProfileComplete } = useAuth();
@@ -77,13 +76,8 @@ export const MainLayout = () => {
     return (
         <div className="flex h-screen bg-background text-foreground overflow-hidden">
 
-            {/* SessionManager — gestiona timeout e inactividad */}
-            <SessionManager />
-
             {/* ====== SIDEBAR — solo visible en lg+ ====== */}
-            {/* FIX: flex-col con overflow oculto en el aside, nav con flex-1 + overflow-y-auto */}
             <aside className="hidden lg:flex w-64 border-r border-white/5 bg-card/50 backdrop-blur-md flex-col py-6 transition-all shrink-0">
-                {/* Logo — altura fija */}
                 <div className="px-8 mb-6 flex items-center shrink-0">
                     {logoUrl ? (
                         <img src={logoUrl} className="w-10 h-10 object-contain rounded-xl" alt={displayName} />
@@ -94,13 +88,10 @@ export const MainLayout = () => {
                     )}
                     <span className="ml-3 font-semibold text-lg tracking-wide">{displayName}</span>
                 </div>
-
-                {/* Nav — ocupa el espacio disponible y hace scroll si es necesario */}
-                <nav className="flex-1 min-h-0 overflow-y-auto px-3 space-y-0.5 scrollbar-thin">
+                {/* nav con scroll — fix para que Cerrar Sesión siempre sea visible */}
+                <nav className="flex-1 min-h-0 overflow-y-auto px-3 space-y-0.5">
                     {allLinks.map(link => <NavItem key={link.to} link={link} />)}
                 </nav>
-
-                {/* Footer — altura fija, siempre visible */}
                 <div className="px-3 pt-4 border-t border-white/5 shrink-0">
                     <button onClick={logout}
                         className="w-full flex items-center gap-3 p-3 rounded-xl text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-all">
