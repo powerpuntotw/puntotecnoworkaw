@@ -44,16 +44,42 @@ export const AdminUsers = () => {
     };
 
     const handleDelete = async (userId, name) => {
-        if (!window.confirm(`¿Eliminar a "${name}" de la base de datos?\n\nNota: esto elimina el registro de la app pero no la cuenta de Google.`)) return;
+        if (!window.confirm(`¿Eliminar a "${name}" completamente del sistema?\n\nEsta acción borrará al usuario de la base de datos y su cuenta de acceso de Appwrite, permitiendo que vuelva a registrarse en el futuro con el mismo correo.`)) return;
         try {
             setDeletingId(userId);
-            await databases.deleteDocument(
-                import.meta.env.VITE_APPWRITE_DATABASE_ID, 'users', userId
-            );
+            
+            // 1. Eliminar identidad del usuario (Auth) vía API REST directa
+            const response = await fetch(`${import.meta.env.VITE_APPWRITE_ENDPOINT}/users/${userId}`, {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Appwrite-Project': import.meta.env.VITE_APPWRITE_PROJECT_ID,
+                    'X-Appwrite-Key': import.meta.env.VITE_APPWRITE_API_KEY
+                }
+            });
+            
+            if (!response.ok && response.status !== 404) {
+                console.error("Error Appwrite API REST:", await response.text());
+                throw new Error("No se pudo eliminar la identidad de autenticación del usuario.");
+            }
+
+            // 2. Eliminar documento de la Database
+            try {
+                await databases.deleteDocument(
+                    import.meta.env.VITE_APPWRITE_DATABASE_ID, 'users', userId
+                );
+            } catch (dbError) {
+                if (dbError.code !== 404) throw dbError; // Si ya no existe, ignorar error
+            }
+
             setUsers(users.filter(u => u.$id !== userId));
-            toast.success('Usuario eliminado.');
-        } catch { toast.error('Error al eliminar.'); }
-        finally { setDeletingId(null); }
+            toast.success('Usuario eliminado completamente.');
+        } catch (error) {
+            console.error("Error eliminando:", error);
+            toast.error('Error al eliminar completo.'); 
+        } finally { 
+            setDeletingId(null); 
+        }
     };
 
     const roleStyle = (t) => {
