@@ -7,15 +7,36 @@ import { Clock, AlertTriangle } from 'lucide-react';
 const DEFAULT_TIMEOUT_MINUTES = 15;
 const WARNING_SECONDS = 60;
 const ACTIVITY_EVENTS = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll', 'click'];
+// Clave en sessionStorage — se borra automáticamente al cerrar pestaña/navegador
 const SESSION_ALIVE_KEY = 'pt_session_alive';
 const DB_ID = () => import.meta.env.VITE_APPWRITE_DATABASE_ID;
+
+// ─── Chequeo al inicio, ANTES de montar cualquier componente ───────────────
+// sessionStorage se vacía al cerrar el tab/browser.
+// Si hay usuario en Appwrite pero NO hay flag → el browser fue cerrado → hay que logout.
+// Esta función se llama desde AuthContext durante checkSession().
+export const checkBrowserExitLogout = () => {
+    const flag = sessionStorage.getItem(SESSION_ALIVE_KEY);
+    // Devuelve true si hay que hacer logout (no había flag = browser fue cerrado)
+    return !flag;
+};
+
+// Pone el flag (llamar después de confirmar que NO hay que hacer logout)
+export const markSessionAlive = () => {
+    sessionStorage.setItem(SESSION_ALIVE_KEY, '1');
+};
+
+// Limpia el flag (llamar al hacer logout manual)
+export const clearSessionAlive = () => {
+    sessionStorage.removeItem(SESSION_ALIVE_KEY);
+};
+// ──────────────────────────────────────────────────────────────────────────
 
 export const SessionManager = () => {
     const { user, logout } = useAuth();
     const [showWarning, setShowWarning] = useState(false);
     const [countdown, setCountdown] = useState(WARNING_SECONDS);
     const [timeoutMinutes, setTimeoutMinutes] = useState(DEFAULT_TIMEOUT_MINUTES);
-    const [closeOnBrowserExit, setCloseOnBrowserExitState] = useState(true);
 
     const inactivityTimer = useRef(null);
     const countdownTimer = useRef(null);
@@ -32,50 +53,20 @@ export const SessionManager = () => {
                 if (res.documents.length > 0) {
                     const config = JSON.parse(res.documents[0].data);
                     if (config.session_timeout_minutes !== undefined) setTimeoutMinutes(config.session_timeout_minutes);
-                    if (config.close_on_browser_exit !== undefined) setCloseOnBrowserExitState(config.close_on_browser_exit);
                 }
             } catch {
-                // usa defaults
+                // usa default
             }
         };
         loadConfig();
     }, [user]);
-
-    // ── Estrategia sessionStorage para cerrar sesión al cerrar el navegador ──
-    // sessionStorage se borra automáticamente cuando se cierra la pestaña/navegador.
-    // Al cargar la app, si closeOnBrowserExit está activo y no hay flag, se hace logout.
-    useEffect(() => {
-        if (!user || !closeOnBrowserExit) return;
-
-        // Marcar que la sesión está activa en esta pestaña
-        sessionStorage.setItem(SESSION_ALIVE_KEY, '1');
-
-        // Al desmontar (cierre de pestaña) el sessionStorage se limpia solo.
-        // No hay cleanup necesario — el browser lo hace.
-    }, [user, closeOnBrowserExit]);
-
-    // Al cargar la app con usuario activo: si closeOnBrowserExit está ON
-    // y no hay flag en sessionStorage → el browser fue cerrado → hacer logout
-    useEffect(() => {
-        if (!user || !closeOnBrowserExit) return;
-
-        const flag = sessionStorage.getItem(SESSION_ALIVE_KEY);
-        if (!flag) {
-            // No había flag → la sesión sobrevivió a un cierre de navegador → cerrar
-            logout();
-        }
-    }, [user, closeOnBrowserExit]);
-    // Nota: este effect corre después del de arriba (que pone el flag), pero
-    // en el PRIMER render, el flag todavía no existe si el browser fue cerrado.
-    // El orden correcto es: primero chequear, después poner el flag.
-    // Por eso separamos en dos effects — React los corre en orden de declaración.
 
     const doLogout = useCallback(async () => {
         setShowWarning(false);
         showWarningRef.current = false;
         clearTimeout(inactivityTimer.current);
         clearInterval(countdownTimer.current);
-        sessionStorage.removeItem(SESSION_ALIVE_KEY);
+        clearSessionAlive();
         await logout();
     }, [logout]);
 
