@@ -7,6 +7,23 @@ const AuthContext = createContext();
 
 export const useAuth = () => useContext(AuthContext);
 
+// Intenta obtener el avatar de Google usando el providerAccessToken de la sesión
+const fetchGoogleAvatar = async () => {
+    try {
+        const session = await account.getSession('current');
+        // Solo intentar si es una sesión de Google con token válido
+        if (session.provider !== 'google' || !session.providerAccessToken) return null;
+        const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+            headers: { Authorization: `Bearer ${session.providerAccessToken}` }
+        });
+        if (!res.ok) return null;
+        const data = await res.json();
+        return data.picture || null;
+    } catch {
+        return null;
+    }
+};
+
 // eslint-disable-next-line react/prop-types
 export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
@@ -20,6 +37,20 @@ export const AuthProvider = ({ children }) => {
 
         try {
             const sessionData = await account.get();
+
+            // Si no tiene avatar guardado en prefs, intentar obtenerlo de Google
+            if (!sessionData.prefs?.avatar) {
+                const googlePicture = await fetchGoogleAvatar();
+                if (googlePicture) {
+                    try {
+                        await account.updatePrefs({ ...sessionData.prefs, avatar: googlePicture });
+                        // Recargar para tener prefs actualizados
+                        sessionData.prefs = { ...sessionData.prefs, avatar: googlePicture };
+                    } catch {
+                        // Si falla actualizar prefs, seguimos sin avatar
+                    }
+                }
+            }
 
             const dbUserData = await databases.listDocuments(
                 import.meta.env.VITE_APPWRITE_DATABASE_ID,
