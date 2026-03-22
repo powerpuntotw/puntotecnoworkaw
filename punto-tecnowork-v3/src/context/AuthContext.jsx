@@ -49,10 +49,12 @@ export const AuthProvider = ({ children }) => {
         try {
             const sessionData = await account.get();
 
-            // ── Chequeo de cierre de navegador ─────────────────────────────
+            // ── Chequeo de cierre de navegador ──────────────────────────────
             // sessionStorage se vacía al cerrar tab/browser.
-            // Si hay sesión activa en Appwrite pero no hay flag en sessionStorage
-            // → el browser fue cerrado → eliminar sesión y redirigir al landing.
+            // Si hay sesión activa en Appwrite pero NO hay flag → el browser fue
+            // cerrado → eliminar sesión y redirigir al landing.
+            // EXCEPCIÓN: si markSessionAlive() fue llamado antes (login reciente),
+            // el flag ya existe y este chequeo pasa normalmente.
             const sessionConfig = await fetchSessionConfig();
             if (sessionConfig.close_on_browser_exit !== false) {
                 if (checkBrowserExitLogout()) {
@@ -64,9 +66,8 @@ export const AuthProvider = ({ children }) => {
                     return;
                 }
             }
-            // Marcar la sesión como activa en esta pestaña
             markSessionAlive();
-            // ───────────────────────────────────────────────────────────────
+            // ────────────────────────────────────────────────────────────────
 
             if (!sessionData.prefs?.avatar) {
                 const googlePicture = await fetchGoogleAvatar();
@@ -130,6 +131,7 @@ export const AuthProvider = ({ children }) => {
     useEffect(() => { checkSession(); }, []);
 
     const loginWithGoogle = () => {
+        // markSessionAlive se llama en AuthCallback después del redirect exitoso
         account.createOAuth2Session(
             OAuthProvider.Google,
             `${window.location.origin}/auth/callback`,
@@ -140,6 +142,8 @@ export const AuthProvider = ({ children }) => {
     const loginWithEmail = async (email, password) => {
         try {
             await account.createEmailPasswordSession(email, password);
+            // Marcar sesión activa ANTES de checkSession para que no haga logout
+            markSessionAlive();
             await checkSession();
             toast.success('¡Sesión iniciada correctamente!');
         } catch {
