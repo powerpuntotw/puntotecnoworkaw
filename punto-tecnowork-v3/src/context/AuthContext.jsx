@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { account, databases } from '../lib/appwrite';
 import { OAuthProvider, Query, ID } from 'appwrite';
 import toast from 'react-hot-toast';
-import { checkBrowserExitLogout, markSessionAlive, clearSessionAlive } from '../components/SessionManager';
+import { checkBrowserExitLogout, markSessionAlive, clearSessionAlive } from '../lib/sessionStorage';
 
 const AuthContext = createContext();
 
@@ -23,7 +23,6 @@ const fetchGoogleAvatar = async () => {
     }
 };
 
-// Obtiene la configuración de sesión desde Appwrite (si existe)
 const fetchSessionConfig = async () => {
     try {
         const res = await databases.listDocuments(
@@ -31,13 +30,9 @@ const fetchSessionConfig = async () => {
             'system_config',
             [Query.equal('type', 'session_config')]
         );
-        if (res.documents.length > 0) {
-            return JSON.parse(res.documents[0].data);
-        }
-    } catch {
-        // Si no existe config, usar defaults
-    }
-    return { close_on_browser_exit: true }; // default activo
+        if (res.documents.length > 0) return JSON.parse(res.documents[0].data);
+    } catch { /* usa defaults */ }
+    return { close_on_browser_exit: true };
 };
 
 // eslint-disable-next-line react/prop-types
@@ -54,15 +49,13 @@ export const AuthProvider = ({ children }) => {
         try {
             const sessionData = await account.get();
 
-            // ── Chequeo de cierre de navegador ──────────────────────────────
+            // ── Chequeo de cierre de navegador ─────────────────────────────
             // sessionStorage se vacía al cerrar tab/browser.
-            // Si hay sesión activa en Appwrite pero no hay flag → el browser
-            // fue cerrado con la sesión activa → hay que cerrarla.
+            // Si hay sesión activa en Appwrite pero no hay flag en sessionStorage
+            // → el browser fue cerrado → eliminar sesión y redirigir al landing.
             const sessionConfig = await fetchSessionConfig();
             if (sessionConfig.close_on_browser_exit !== false) {
-                const shouldLogout = checkBrowserExitLogout();
-                if (shouldLogout) {
-                    // Eliminar la sesión en Appwrite y salir
+                if (checkBrowserExitLogout()) {
                     try { await account.deleteSession('current'); } catch { /* ignorar */ }
                     setUser(null);
                     setDbUser(null);
@@ -71,11 +64,10 @@ export const AuthProvider = ({ children }) => {
                     return;
                 }
             }
-            // Marcar sesión activa para esta pestaña
+            // Marcar la sesión como activa en esta pestaña
             markSessionAlive();
-            // ────────────────────────────────────────────────────────────────
+            // ───────────────────────────────────────────────────────────────
 
-            // Intentar obtener avatar de Google si no tiene
             if (!sessionData.prefs?.avatar) {
                 const googlePicture = await fetchGoogleAvatar();
                 if (googlePicture) {
@@ -100,8 +92,7 @@ export const AuthProvider = ({ children }) => {
                     try {
                         currentUserDoc = await databases.updateDocument(
                             import.meta.env.VITE_APPWRITE_DATABASE_ID,
-                            'users',
-                            currentUserDoc.$id,
+                            'users', currentUserDoc.$id,
                             { user_type: 'admin' }
                         );
                         toast.success('¡Cuenta promovida a Administrador automáticamente!');
@@ -112,8 +103,7 @@ export const AuthProvider = ({ children }) => {
             } else {
                 currentUserDoc = await databases.createDocument(
                     import.meta.env.VITE_APPWRITE_DATABASE_ID,
-                    'users',
-                    ID.unique(),
+                    'users', ID.unique(),
                     {
                         auth_id: sessionData.$id,
                         full_name: sessionData.name || 'Nuevo Usuario',
@@ -130,18 +120,14 @@ export const AuthProvider = ({ children }) => {
         } catch (error) {
             setUser(null);
             setDbUser(null);
-            if (error.code !== 401) {
-                toast.error('Ocurrió un error al verificar la sesión.');
-            }
+            if (error.code !== 401) toast.error('Ocurrió un error al verificar la sesión.');
         } finally {
             setLoading(false);
             isCheckingRef.current = false;
         }
     };
 
-    useEffect(() => {
-        checkSession();
-    }, []);
+    useEffect(() => { checkSession(); }, []);
 
     const loginWithGoogle = () => {
         account.createOAuth2Session(
@@ -156,9 +142,9 @@ export const AuthProvider = ({ children }) => {
             await account.createEmailPasswordSession(email, password);
             await checkSession();
             toast.success('¡Sesión iniciada correctamente!');
-        } catch (error) {
+        } catch {
             toast.error('Credenciales inválidas o error de conexión.');
-            throw error;
+            throw new Error('Login failed');
         }
     };
 
@@ -187,16 +173,14 @@ export const AuthProvider = ({ children }) => {
         try {
             const updated = await databases.updateDocument(
                 import.meta.env.VITE_APPWRITE_DATABASE_ID,
-                'users',
-                dbUser.$id,
-                data
+                'users', dbUser.$id, data
             );
             setDbUser(updated);
             toast.success('Perfil actualizado correctamente');
             return updated;
-        } catch (error) {
+        } catch {
             toast.error('Error al actualizar el perfil');
-            throw error;
+            throw new Error('Update failed');
         }
     };
 
@@ -205,15 +189,13 @@ export const AuthProvider = ({ children }) => {
         return !!(dbUser.full_name && dbUser.email && dbUser.phone && dbUser.dni && dbUser.address);
     };
 
-    const value = {
-        user, dbUser, loading,
-        isProfileComplete, updateProfile,
-        loginWithGoogle, loginWithEmail, registerWithEmail,
-        logout, checkSession
-    };
-
     return (
-        <AuthContext.Provider value={value}>
+        <AuthContext.Provider value={{
+            user, dbUser, loading,
+            isProfileComplete, updateProfile,
+            loginWithGoogle, loginWithEmail, registerWithEmail,
+            logout, checkSession
+        }}>
             {children}
         </AuthContext.Provider>
     );
