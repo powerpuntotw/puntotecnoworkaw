@@ -1,36 +1,14 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { databases } from '../lib/appwrite';
+import { clearSessionAlive } from '../lib/sessionStorage';
 import { Query } from 'appwrite';
 import { Clock, AlertTriangle } from 'lucide-react';
 
 const DEFAULT_TIMEOUT_MINUTES = 15;
 const WARNING_SECONDS = 60;
 const ACTIVITY_EVENTS = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll', 'click'];
-// Clave en sessionStorage — se borra automáticamente al cerrar pestaña/navegador
-const SESSION_ALIVE_KEY = 'pt_session_alive';
 const DB_ID = () => import.meta.env.VITE_APPWRITE_DATABASE_ID;
-
-// ─── Chequeo al inicio, ANTES de montar cualquier componente ───────────────
-// sessionStorage se vacía al cerrar el tab/browser.
-// Si hay usuario en Appwrite pero NO hay flag → el browser fue cerrado → hay que logout.
-// Esta función se llama desde AuthContext durante checkSession().
-export const checkBrowserExitLogout = () => {
-    const flag = sessionStorage.getItem(SESSION_ALIVE_KEY);
-    // Devuelve true si hay que hacer logout (no había flag = browser fue cerrado)
-    return !flag;
-};
-
-// Pone el flag (llamar después de confirmar que NO hay que hacer logout)
-export const markSessionAlive = () => {
-    sessionStorage.setItem(SESSION_ALIVE_KEY, '1');
-};
-
-// Limpia el flag (llamar al hacer logout manual)
-export const clearSessionAlive = () => {
-    sessionStorage.removeItem(SESSION_ALIVE_KEY);
-};
-// ──────────────────────────────────────────────────────────────────────────
 
 export const SessionManager = () => {
     const { user, logout } = useAuth();
