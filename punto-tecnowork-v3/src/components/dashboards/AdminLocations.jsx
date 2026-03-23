@@ -2,17 +2,12 @@ import { useState, useEffect } from 'react';
 import { databases } from '../../lib/appwrite';
 import { Query, ID } from 'appwrite';
 import toast from 'react-hot-toast';
-import { Loader2, Plus, Trash2, Camera, Palette, Maximize, DollarSign, ShieldCheck, MapPin, Settings2, CheckCircle, XCircle, Clock } from 'lucide-react';
+import { Loader2, Plus, Trash2, Camera, Palette, Maximize, DollarSign, ShieldCheck, MapPin, Settings2, CheckCircle, XCircle, Clock, ChevronDown } from 'lucide-react';
 
-// Helper: log de auditoria
 const logAudit = async (databases, dbId, action, description) => {
     try {
-        await databases.createDocument(dbId, 'audit_logs', ID.unique(), {
-            admin_name: 'Administrador',
-            action,
-            description
-        });
-    } catch { /* audit no bloquea */ }
+        await databases.createDocument(dbId, 'audit_logs', ID.unique(), { admin_name: 'Administrador', action, description });
+    } catch { }
 };
 
 export const AdminLocations = () => {
@@ -22,6 +17,7 @@ export const AdminLocations = () => {
     const [isSaving, setIsSaving] = useState(false);
     const [editingLocation, setEditingLocation] = useState(null);
     const [showModal, setShowModal] = useState(false);
+    const [managerDropdownOpen, setManagerDropdownOpen] = useState(false);
 
     const emptyForm = {
         name: '', address: '', phone: '', email: '', manager_id: '',
@@ -54,6 +50,7 @@ export const AdminLocations = () => {
     const openCreateModal = () => {
         setEditingLocation(null);
         setFormData(emptyForm);
+        setManagerDropdownOpen(false);
         setShowModal(true);
     };
 
@@ -70,6 +67,7 @@ export const AdminLocations = () => {
             allow_custom_prices: loc.allow_custom_prices || false,
             status: loc.status || 'activo', is_open: loc.is_open ?? true
         });
+        setManagerDropdownOpen(false);
         setShowModal(true);
     };
 
@@ -95,17 +93,15 @@ export const AdminLocations = () => {
                 await logAudit(databases, dbId, 'Crear Sucursal', `Creó sucursal: ${formData.name} en ${formData.address}`);
             }
 
-            // Actualizar roles + location_id en usuario
             if (newManagerId && newManagerId !== oldManagerId) {
                 await databases.updateDocument(dbId, 'users', newManagerId, {
                     user_type: 'local',
-                    location_id: finalDoc.$id   // ← FIX CRITICO: asignar location_id
+                    location_id: finalDoc.$id
                 });
                 const managerName = allUsers.find(u => u.$id === newManagerId)?.full_name || newManagerId;
                 toast.success(`${managerName} asignado como responsable`);
-                await logAudit(databases, dbId, 'Asignar Encargado', `${managerName} → rol local, sucursal ${formData.name}`);
+                await logAudit(databases, dbId, 'Asignar Encargado', `${managerName} → local, sucursal ${formData.name}`);
             }
-            // Si cambió el encargado, limpiar el anterior
             if (oldManagerId && oldManagerId !== newManagerId) {
                 await databases.updateDocument(dbId, 'users', oldManagerId, {
                     user_type: 'client',
@@ -127,11 +123,8 @@ export const AdminLocations = () => {
         if (!window.confirm(`¿Seguro que deseas eliminar "${loc?.name}"?`)) return;
         try {
             const dbId = import.meta.env.VITE_APPWRITE_DATABASE_ID;
-            // Liberar al encargado
             if (loc?.manager_id) {
-                await databases.updateDocument(dbId, 'users', loc.manager_id, {
-                    user_type: 'client', location_id: null
-                });
+                await databases.updateDocument(dbId, 'users', loc.manager_id, { user_type: 'client', location_id: null });
             }
             await databases.deleteDocument(dbId, 'printing_locations', id);
             setLocations(locations.filter(l => l.$id !== id));
@@ -140,8 +133,19 @@ export const AdminLocations = () => {
         } catch { toast.error("Error al eliminar"); }
     };
 
-    // Usuarios disponibles para encargado: cualquiera (admin puede asignar a cualquier user)
-    const availableManagers = allUsers;
+    // Solo usuarios con rol 'local' o 'client' (no admin). Los ya asignados a OTRO local no aparecen,
+    // excepto el encargado actual de la sucursal que se está editando.
+    const assignedToOtherLocation = locations
+        .filter(l => l.$id !== editingLocation?.$id)
+        .map(l => l.manager_id)
+        .filter(Boolean);
+
+    const availableManagers = allUsers.filter(u =>
+        u.user_type !== 'admin' &&
+        !assignedToOtherLocation.includes(u.$id)
+    );
+
+    const selectedManagerName = allUsers.find(u => u.$id === formData.manager_id)?.full_name;
 
     return (
         <div className="space-y-8 pb-10">
@@ -220,8 +224,8 @@ export const AdminLocations = () => {
 
             {/* Modal */}
             {showModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-xl">
-                    <div className="bg-dark/80 backdrop-blur-3xl w-full max-w-3xl max-h-[90vh] overflow-y-auto border border-white/10 rounded-[3rem] p-10 shadow-3xl custom-scrollbar relative">
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-xl" onClick={() => setManagerDropdownOpen(false)}>
+                    <div className="bg-[#0a0a0f] border border-white/10 w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-[3rem] p-10 shadow-3xl custom-scrollbar relative" onClick={e => e.stopPropagation()}>
                         <div className="flex justify-between items-start mb-10">
                             <div>
                                 <h2 className="text-3xl font-black text-white italic tracking-tighter uppercase">{editingLocation ? 'Editar Sucursal' : 'Nueva Sucursal'}</h2>
@@ -236,15 +240,49 @@ export const AdminLocations = () => {
                                     <label className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Nombre Comercial *</label>
                                     <input required value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-white font-bold focus:border-primary outline-none transition" placeholder="Ej: PuntTw Centro" />
                                 </div>
-                                <div className="space-y-2">
-                                    <label className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Encargado *</label>
-                                    <select required value={formData.manager_id} onChange={e => setFormData({...formData, manager_id: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-white font-bold focus:border-primary outline-none transition cursor-pointer">
-                                        <option value="" className="bg-[#0a0a0f]">-- Sin encargado --</option>
-                                        {availableManagers.map(m => (
-                                            <option key={m.$id} value={m.$id} className="bg-[#0a0a0f]">{m.full_name} ({m.user_type})</option>
-                                        ))}
-                                    </select>
+
+                                {/* Encargado — dropdown custom sobre fondo oscuro garantizado */}
+                                <div className="space-y-2 relative">
+                                    <label className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Encargado</label>
+                                    <button
+                                        type="button"
+                                        onClick={e => { e.stopPropagation(); setManagerDropdownOpen(v => !v); }}
+                                        className="w-full bg-white/5 border border-white/10 hover:border-white/30 rounded-2xl px-5 py-4 text-left font-bold transition flex items-center justify-between gap-3"
+                                    >
+                                        <span className={selectedManagerName ? 'text-white' : 'text-gray-500'}>
+                                            {selectedManagerName || '-- Sin encargado --'}
+                                        </span>
+                                        <ChevronDown size={16} className={`text-gray-400 transition-transform ${managerDropdownOpen ? 'rotate-180' : ''}`} />
+                                    </button>
+                                    {managerDropdownOpen && (
+                                        <div className="absolute left-0 right-0 top-full mt-2 bg-[#111] border border-white/20 rounded-2xl overflow-hidden shadow-2xl z-50 max-h-60 overflow-y-auto">
+                                            <button
+                                                type="button"
+                                                onClick={() => { setFormData({...formData, manager_id: ''}); setManagerDropdownOpen(false); }}
+                                                className="w-full text-left px-5 py-3 text-gray-400 hover:bg-white/10 transition text-sm font-medium"
+                                            >
+                                                -- Sin encargado --
+                                            </button>
+                                            {availableManagers.length === 0 && (
+                                                <div className="px-5 py-3 text-gray-600 text-sm italic">No hay usuarios disponibles</div>
+                                            )}
+                                            {availableManagers.map(u => (
+                                                <button
+                                                    key={u.$id}
+                                                    type="button"
+                                                    onClick={() => { setFormData({...formData, manager_id: u.$id}); setManagerDropdownOpen(false); }}
+                                                    className={`w-full text-left px-5 py-3 transition text-sm font-bold flex items-center justify-between gap-3 ${formData.manager_id === u.$id ? 'bg-primary/20 text-primary' : 'text-white hover:bg-white/10'}`}
+                                                >
+                                                    <span>{u.full_name}</span>
+                                                    <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${u.user_type === 'local' ? 'bg-success/20 text-success' : 'bg-white/10 text-gray-400'}`}>
+                                                        {u.user_type}
+                                                    </span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
+
                                 <div className="md:col-span-2 space-y-2">
                                     <label className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Dirección Física *</label>
                                     <div className="relative">
@@ -257,6 +295,7 @@ export const AdminLocations = () => {
                                     <input value={formData.schedule} onChange={e => setFormData({...formData, schedule: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-white font-bold focus:border-accent outline-none transition" placeholder="Ej: Lun-Vie 8-20hs · Sáb 9-14hs" />
                                 </div>
                             </div>
+
                             {/* Servicios */}
                             <div className="space-y-3">
                                 <p className="text-[10px] text-secondary font-black uppercase tracking-widest">Servicios habilitados</p>
@@ -297,6 +336,7 @@ export const AdminLocations = () => {
                                     </div>
                                 </label>
                             </div>
+
                             <div className="flex gap-4 pt-4">
                                 <button type="button" onClick={() => setShowModal(false)} className="flex-1 py-4 rounded-2xl bg-white/5 text-gray-400 font-black uppercase tracking-widest hover:bg-white/10 transition border border-white/5">Cancelar</button>
                                 <button type="submit" disabled={isSaving} className="flex-[2] py-4 rounded-2xl bg-primary hover:bg-primary-glow text-white font-black shadow-glow transition disabled:opacity-50 ring-4 ring-primary/20 uppercase tracking-tighter text-lg italic">
