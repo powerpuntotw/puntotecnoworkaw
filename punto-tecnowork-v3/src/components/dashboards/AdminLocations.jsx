@@ -2,13 +2,49 @@ import { useState, useEffect } from 'react';
 import { databases } from '../../lib/appwrite';
 import { Query, ID } from 'appwrite';
 import toast from 'react-hot-toast';
-import { Loader2, Plus, Trash2, Camera, Palette, Maximize, DollarSign, ShieldCheck, MapPin, Settings2, CheckCircle, XCircle, Clock, ChevronDown } from 'lucide-react';
+import { Loader2, Plus, Trash2, Camera, Palette, Maximize, DollarSign, ShieldCheck, MapPin, Settings2, CheckCircle, XCircle, Clock } from 'lucide-react';
 
 const logAudit = async (databases, dbId, action, description) => {
     try {
         await databases.createDocument(dbId, 'audit_logs', ID.unique(), { admin_name: 'Administrador', action, description });
     } catch { }
 };
+
+// Select nativo con estilos hardcoded para garantizar legibilidad en cualquier tema del SO
+const DarkSelect = ({ value, onChange, children, required }) => (
+    <select
+        required={required}
+        value={value}
+        onChange={onChange}
+        style={{
+            width: '100%',
+            backgroundColor: '#1a1a1a',
+            color: '#ffffff',
+            border: '1px solid rgba(255,255,255,0.15)',
+            borderRadius: '16px',
+            padding: '16px 20px',
+            fontSize: '14px',
+            fontWeight: '700',
+            outline: 'none',
+            cursor: 'pointer',
+            appearance: 'none',
+            WebkitAppearance: 'none',
+            backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`,
+            backgroundRepeat: 'no-repeat',
+            backgroundPosition: 'right 16px center',
+            paddingRight: '44px',
+        }}
+    >
+        {children}
+    </select>
+);
+
+// Opción con fondo oscuro forzado
+const DarkOption = ({ value, children }) => (
+    <option value={value} style={{ backgroundColor: '#1a1a1a', color: '#ffffff' }}>
+        {children}
+    </option>
+);
 
 export const AdminLocations = () => {
     const [locations, setLocations] = useState([]);
@@ -17,7 +53,6 @@ export const AdminLocations = () => {
     const [isSaving, setIsSaving] = useState(false);
     const [editingLocation, setEditingLocation] = useState(null);
     const [showModal, setShowModal] = useState(false);
-    const [managerDropdownOpen, setManagerDropdownOpen] = useState(false);
 
     const emptyForm = {
         name: '', address: '', phone: '', email: '', manager_id: '',
@@ -50,7 +85,6 @@ export const AdminLocations = () => {
     const openCreateModal = () => {
         setEditingLocation(null);
         setFormData(emptyForm);
-        setManagerDropdownOpen(false);
         setShowModal(true);
     };
 
@@ -67,7 +101,6 @@ export const AdminLocations = () => {
             allow_custom_prices: loc.allow_custom_prices || false,
             status: loc.status || 'activo', is_open: loc.is_open ?? true
         });
-        setManagerDropdownOpen(false);
         setShowModal(true);
     };
 
@@ -99,7 +132,7 @@ export const AdminLocations = () => {
                     location_id: finalDoc.$id
                 });
                 const managerName = allUsers.find(u => u.$id === newManagerId)?.full_name || newManagerId;
-                toast.success(`${managerName} asignado como responsable`);
+                toast.success(`${managerName} asignado como encargado`);
                 await logAudit(databases, dbId, 'Asignar Encargado', `${managerName} → local, sucursal ${formData.name}`);
             }
             if (oldManagerId && oldManagerId !== newManagerId) {
@@ -133,19 +166,16 @@ export const AdminLocations = () => {
         } catch { toast.error("Error al eliminar"); }
     };
 
-    // Solo usuarios con rol 'local' o 'client' (no admin). Los ya asignados a OTRO local no aparecen,
-    // excepto el encargado actual de la sucursal que se está editando.
-    const assignedToOtherLocation = locations
+    // Solo usuarios no-admin y sin sucursal asignada (excepto el encargado actual al editar)
+    const assignedElsewhere = locations
         .filter(l => l.$id !== editingLocation?.$id)
         .map(l => l.manager_id)
         .filter(Boolean);
 
     const availableManagers = allUsers.filter(u =>
         u.user_type !== 'admin' &&
-        !assignedToOtherLocation.includes(u.$id)
+        !assignedElsewhere.includes(u.$id)
     );
-
-    const selectedManagerName = allUsers.find(u => u.$id === formData.manager_id)?.full_name;
 
     return (
         <div className="space-y-8 pb-10">
@@ -222,77 +252,82 @@ export const AdminLocations = () => {
                 </div>
             )}
 
-            {/* Modal */}
+            {/* Modal — sin overflow en el form para que los inputs funcionen bien */}
             {showModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-xl" onClick={() => setManagerDropdownOpen(false)}>
-                    <div className="bg-[#0a0a0f] border border-white/10 w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-[3rem] p-10 shadow-3xl custom-scrollbar relative" onClick={e => e.stopPropagation()}>
-                        <div className="flex justify-between items-start mb-10">
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-xl">
+                    <div style={{ backgroundColor: '#0a0a0f' }} className="border border-white/10 w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-[3rem] p-10 shadow-2xl custom-scrollbar">
+                        <div className="flex justify-between items-start mb-8">
                             <div>
                                 <h2 className="text-3xl font-black text-white italic tracking-tighter uppercase">{editingLocation ? 'Editar Sucursal' : 'Nueva Sucursal'}</h2>
-                                <p className="text-gray-500 font-medium mt-1">Configuración técnica y operativa del punto de venta.</p>
+                                <p className="text-gray-500 font-medium mt-1">Configuración del punto de venta.</p>
                             </div>
-                            <button onClick={() => setShowModal(false)} className="p-3 bg-white/5 rounded-2xl border border-white/5 text-gray-500 hover:text-white transition"><XCircle size={22} /></button>
+                            <button type="button" onClick={() => setShowModal(false)} className="p-3 rounded-2xl border border-white/10 text-gray-500 hover:text-white transition" style={{ backgroundColor: 'rgba(255,255,255,0.05)' }}>
+                                <XCircle size={22} />
+                            </button>
                         </div>
-                        <form onSubmit={handleSubmit} className="space-y-8">
-                            {/* Identidad */}
+
+                        <form onSubmit={handleSubmit} className="space-y-6">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                {/* Nombre */}
                                 <div className="space-y-2">
-                                    <label className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Nombre Comercial *</label>
-                                    <input required value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-white font-bold focus:border-primary outline-none transition" placeholder="Ej: PuntTw Centro" />
+                                    <label className="text-[10px] text-gray-500 font-black uppercase tracking-widest block">Nombre Comercial *</label>
+                                    <input
+                                        required
+                                        type="text"
+                                        value={formData.name}
+                                        onChange={e => setFormData({ ...formData, name: e.target.value })}
+                                        placeholder="Ej: PuntTw Centro"
+                                        style={{ backgroundColor: '#1a1a1a', color: '#fff', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '16px', padding: '16px 20px', width: '100%', fontSize: '14px', fontWeight: '700', outline: 'none', boxSizing: 'border-box' }}
+                                    />
                                 </div>
 
-                                {/* Encargado — dropdown custom sobre fondo oscuro garantizado */}
-                                <div className="space-y-2 relative">
-                                    <label className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Encargado</label>
-                                    <button
-                                        type="button"
-                                        onClick={e => { e.stopPropagation(); setManagerDropdownOpen(v => !v); }}
-                                        className="w-full bg-white/5 border border-white/10 hover:border-white/30 rounded-2xl px-5 py-4 text-left font-bold transition flex items-center justify-between gap-3"
+                                {/* Encargado — select nativo con CSS inline para forzar tema oscuro */}
+                                <div className="space-y-2">
+                                    <label className="text-[10px] text-gray-500 font-black uppercase tracking-widest block">Encargado</label>
+                                    <DarkSelect
+                                        value={formData.manager_id}
+                                        onChange={e => setFormData({ ...formData, manager_id: e.target.value })}
                                     >
-                                        <span className={selectedManagerName ? 'text-white' : 'text-gray-500'}>
-                                            {selectedManagerName || '-- Sin encargado --'}
-                                        </span>
-                                        <ChevronDown size={16} className={`text-gray-400 transition-transform ${managerDropdownOpen ? 'rotate-180' : ''}`} />
-                                    </button>
-                                    {managerDropdownOpen && (
-                                        <div className="absolute left-0 right-0 top-full mt-2 bg-[#111] border border-white/20 rounded-2xl overflow-hidden shadow-2xl z-50 max-h-60 overflow-y-auto">
-                                            <button
-                                                type="button"
-                                                onClick={() => { setFormData({...formData, manager_id: ''}); setManagerDropdownOpen(false); }}
-                                                className="w-full text-left px-5 py-3 text-gray-400 hover:bg-white/10 transition text-sm font-medium"
-                                            >
-                                                -- Sin encargado --
-                                            </button>
-                                            {availableManagers.length === 0 && (
-                                                <div className="px-5 py-3 text-gray-600 text-sm italic">No hay usuarios disponibles</div>
-                                            )}
-                                            {availableManagers.map(u => (
-                                                <button
-                                                    key={u.$id}
-                                                    type="button"
-                                                    onClick={() => { setFormData({...formData, manager_id: u.$id}); setManagerDropdownOpen(false); }}
-                                                    className={`w-full text-left px-5 py-3 transition text-sm font-bold flex items-center justify-between gap-3 ${formData.manager_id === u.$id ? 'bg-primary/20 text-primary' : 'text-white hover:bg-white/10'}`}
-                                                >
-                                                    <span>{u.full_name}</span>
-                                                    <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${u.user_type === 'local' ? 'bg-success/20 text-success' : 'bg-white/10 text-gray-400'}`}>
-                                                        {u.user_type}
-                                                    </span>
-                                                </button>
-                                            ))}
-                                        </div>
+                                        <DarkOption value="">-- Sin encargado --</DarkOption>
+                                        {availableManagers.map(u => (
+                                            <DarkOption key={u.$id} value={u.$id}>
+                                                {u.full_name} [{u.user_type}]
+                                            </DarkOption>
+                                        ))}
+                                    </DarkSelect>
+                                    {availableManagers.length === 0 && (
+                                        <p className="text-[10px] text-yellow-500 mt-1">No hay usuarios disponibles (sin admin ni asignados a otro local)</p>
                                     )}
                                 </div>
 
+                                {/* Dirección */}
                                 <div className="md:col-span-2 space-y-2">
-                                    <label className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Dirección Física *</label>
+                                    <label className="text-[10px] text-gray-500 font-black uppercase tracking-widest block">Dirección Física *</label>
                                     <div className="relative">
-                                        <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" size={16} />
-                                        <input required value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-2xl pl-11 pr-5 py-4 text-white font-bold focus:border-secondary outline-none transition" placeholder="Ej: 9 de Julio 1241" />
+                                        <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" size={16} />
+                                        <input
+                                            required
+                                            type="text"
+                                            value={formData.address}
+                                            onChange={e => setFormData({ ...formData, address: e.target.value })}
+                                            placeholder="Ej: 9 de Julio 1241"
+                                            style={{ backgroundColor: '#1a1a1a', color: '#fff', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '16px', padding: '16px 20px 16px 44px', width: '100%', fontSize: '14px', fontWeight: '700', outline: 'none', boxSizing: 'border-box' }}
+                                        />
                                     </div>
                                 </div>
+
+                                {/* Horario */}
                                 <div className="md:col-span-2 space-y-2">
-                                    <label className="text-[10px] text-gray-500 font-black uppercase tracking-widest flex items-center gap-2"><Clock size={12} className="text-accent" /> Horario de atención</label>
-                                    <input value={formData.schedule} onChange={e => setFormData({...formData, schedule: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-white font-bold focus:border-accent outline-none transition" placeholder="Ej: Lun-Vie 8-20hs · Sáb 9-14hs" />
+                                    <label className="text-[10px] text-gray-500 font-black uppercase tracking-widest flex items-center gap-2">
+                                        <Clock size={11} className="text-accent" /> Horario de atención
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={formData.schedule}
+                                        onChange={e => setFormData({ ...formData, schedule: e.target.value })}
+                                        placeholder="Ej: Lun-Vie 8-20hs · Sáb 9-14hs"
+                                        style={{ backgroundColor: '#1a1a1a', color: '#fff', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '16px', padding: '16px 20px', width: '100%', fontSize: '14px', fontWeight: '700', outline: 'none', boxSizing: 'border-box' }}
+                                    />
                                 </div>
                             </div>
 
@@ -301,46 +336,60 @@ export const AdminLocations = () => {
                                 <p className="text-[10px] text-secondary font-black uppercase tracking-widest">Servicios habilitados</p>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                     {[
-                                        { key: 'has_fotoya', label: 'Servicio FotoYa', sub: 'Fotos 10x15 glossy', Icon: Camera },
-                                        { key: 'has_color_printing', label: 'Impresión Color', sub: 'Premium inyección/láser', Icon: Palette },
-                                    ].map(({ key, label, sub, Icon }) => (
-                                        <label key={key} className={`flex items-center gap-4 p-4 rounded-2xl border cursor-pointer transition ${formData[key] ? 'bg-primary/10 border-primary/30' : 'bg-white/3 border-white/5 hover:border-white/15'}`}>
-                                            <div className="relative flex items-center justify-center">
-                                                <input type="checkbox" checked={formData[key]} onChange={e => setFormData({...formData, [key]: e.target.checked})} className="w-5 h-5 rounded appearance-none border border-white/20 bg-white/5 checked:bg-primary cursor-pointer" />
+                                        { key: 'has_fotoya', label: 'Servicio FotoYa', sub: 'Fotos 10x15 glossy' },
+                                        { key: 'has_color_printing', label: 'Impresión Color', sub: 'Premium inyección/láser' },
+                                    ].map(({ key, label, sub }) => (
+                                        <label key={key} className={`flex items-center gap-4 p-4 rounded-2xl border cursor-pointer transition ${formData[key] ? 'bg-primary/10 border-primary/30' : 'border-white/10 hover:border-white/20'}`} style={{ backgroundColor: formData[key] ? undefined : 'rgba(255,255,255,0.03)' }}>
+                                            <div className="relative flex items-center justify-center shrink-0">
+                                                <input type="checkbox" checked={formData[key]} onChange={e => setFormData({ ...formData, [key]: e.target.checked })} className="w-5 h-5 rounded appearance-none border border-white/20 checked:bg-primary cursor-pointer" style={{ backgroundColor: formData[key] ? '#EB1C24' : 'rgba(255,255,255,0.05)' }} />
                                                 {formData[key] && <CheckCircle size={12} className="absolute text-white pointer-events-none" />}
                                             </div>
-                                            <div><p className="text-sm font-black text-white uppercase tracking-tight">{label}</p><p className="text-[10px] text-gray-600">{sub}</p></div>
+                                            <div>
+                                                <p className="text-sm font-black text-white uppercase">{label}</p>
+                                                <p className="text-[10px] text-gray-500">{sub}</p>
+                                            </div>
                                         </label>
                                     ))}
                                 </div>
-                                <div className="grid grid-cols-2 gap-4 bg-white/3 p-5 rounded-2xl border border-white/5">
+
+                                <div className="grid grid-cols-2 gap-4 p-5 rounded-2xl border border-white/10" style={{ backgroundColor: 'rgba(255,255,255,0.03)' }}>
                                     {[['max_bw_size', 'Tamaño máx. B&N'], ['max_color_size', 'Tamaño máx. Color']].map(([key, label]) => (
                                         <div key={key} className="space-y-2">
-                                            <p className="text-[9px] text-gray-600 font-black uppercase tracking-widest">{label}</p>
+                                            <p className="text-[9px] text-gray-500 font-black uppercase tracking-widest">{label}</p>
                                             <div className="flex gap-2">
                                                 {['A4', 'A3'].map(v => (
-                                                    <button key={v} type="button" onClick={() => setFormData({...formData, [key]: v})} className={`flex-1 py-2.5 rounded-xl border font-black text-xs uppercase transition ${formData[key] === v ? 'bg-white text-black border-white' : 'bg-white/5 border-white/10 text-gray-500 hover:border-white/30'}`}>{v}</button>
+                                                    <button key={v} type="button" onClick={() => setFormData({ ...formData, [key]: v })}
+                                                        className="flex-1 py-2.5 rounded-xl border font-black text-xs uppercase transition"
+                                                        style={{ backgroundColor: formData[key] === v ? '#ffffff' : 'rgba(255,255,255,0.05)', color: formData[key] === v ? '#000' : '#888', border: formData[key] === v ? '1px solid #fff' : '1px solid rgba(255,255,255,0.1)' }}>
+                                                        {v}
+                                                    </button>
                                                 ))}
                                             </div>
                                         </div>
                                     ))}
                                 </div>
-                                <label className="flex items-center justify-between p-5 bg-success/5 border border-success/20 rounded-2xl cursor-pointer hover:bg-success/10 transition">
+
+                                <label className="flex items-center justify-between p-5 rounded-2xl cursor-pointer transition" style={{ backgroundColor: 'rgba(164,204,57,0.05)', border: '1px solid rgba(164,204,57,0.2)' }}>
                                     <div className="flex items-center gap-4">
                                         <DollarSign className="text-success" size={20} />
-                                        <div><p className="text-sm font-black text-white uppercase">Arancelería propia</p><p className="text-[10px] text-success/70">Precios independientes para este local</p></div>
+                                        <div>
+                                            <p className="text-sm font-black text-white uppercase">Arancelería propia</p>
+                                            <p className="text-[10px]" style={{ color: 'rgba(164,204,57,0.7)' }}>Precios independientes para este local</p>
+                                        </div>
                                     </div>
-                                    <div className="relative flex items-center justify-center">
-                                        <input type="checkbox" checked={formData.allow_custom_prices} onChange={e => setFormData({...formData, allow_custom_prices: e.target.checked})} className="w-6 h-6 rounded appearance-none border border-success/30 bg-white/5 checked:bg-success cursor-pointer" />
+                                    <div className="relative flex items-center justify-center shrink-0">
+                                        <input type="checkbox" checked={formData.allow_custom_prices} onChange={e => setFormData({ ...formData, allow_custom_prices: e.target.checked })} className="w-6 h-6 rounded appearance-none cursor-pointer" style={{ backgroundColor: formData.allow_custom_prices ? '#A4CC39' : 'rgba(255,255,255,0.05)', border: '1px solid rgba(164,204,57,0.3)' }} />
                                         {formData.allow_custom_prices && <CheckCircle size={14} className="absolute text-white pointer-events-none" />}
                                     </div>
                                 </label>
                             </div>
 
-                            <div className="flex gap-4 pt-4">
-                                <button type="button" onClick={() => setShowModal(false)} className="flex-1 py-4 rounded-2xl bg-white/5 text-gray-400 font-black uppercase tracking-widest hover:bg-white/10 transition border border-white/5">Cancelar</button>
-                                <button type="submit" disabled={isSaving} className="flex-[2] py-4 rounded-2xl bg-primary hover:bg-primary-glow text-white font-black shadow-glow transition disabled:opacity-50 ring-4 ring-primary/20 uppercase tracking-tighter text-lg italic">
-                                    {isSaving ? <Loader2 className="animate-spin inline mr-2" /> : editingLocation ? 'Guardar Cambios' : 'Crear Sucursal'}
+                            <div className="flex gap-4 pt-2">
+                                <button type="button" onClick={() => setShowModal(false)} className="flex-1 py-4 rounded-2xl font-black uppercase tracking-widest transition" style={{ backgroundColor: 'rgba(255,255,255,0.05)', color: '#888', border: '1px solid rgba(255,255,255,0.1)' }}>
+                                    Cancelar
+                                </button>
+                                <button type="submit" disabled={isSaving} className="flex-[2] py-4 rounded-2xl bg-primary hover:bg-primary-glow text-white font-black shadow-glow transition disabled:opacity-50 uppercase italic text-lg tracking-tighter">
+                                    {isSaving ? <Loader2 className="animate-spin inline mr-2" size={18} /> : editingLocation ? 'Guardar Cambios' : 'Crear Sucursal'}
                                 </button>
                             </div>
                         </form>
