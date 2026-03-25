@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { databases, client } from '../lib/appwrite';
 import { Query, ID } from 'appwrite';
 import toast from 'react-hot-toast';
-import { MessageSquare, Send, User, ChevronRight, Loader2, Sparkles, AlertCircle, Phone } from 'lucide-react';
+import { MessageSquare, Send, Loader2, AlertCircle, ChevronRight, Plus, CheckCircle, X } from 'lucide-react';
 
 export const TicketsSystem = () => {
     const { user, dbUser } = useAuth();
@@ -13,153 +13,141 @@ export const TicketsSystem = () => {
     const [newMessage, setNewMessage] = useState('');
     const [loading, setLoading] = useState(true);
     const [sending, setSending] = useState(false);
+    const [closingId, setClosingId] = useState(null);
     const messagesEndRef = useRef(null);
+    const unsubMessagesRef = useRef(null);
 
-    const scrollToBottom = () => {
-        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    };
+    const isAdmin = dbUser?.user_type === 'admin';
 
-    useEffect(() => {
-        scrollToBottom();
-    }, [messages]);
+    useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
     const fetchTickets = async () => {
         try {
             setLoading(true);
             const dbId = import.meta.env.VITE_APPWRITE_DATABASE_ID;
-            let queries = [Query.orderDesc('$createdAt')];
-            
-            // Only admins see all tickets
-            if (dbUser?.user_type !== 'admin') {
-                queries.push(Query.equal('client_id', user.$id));
-            }
-
+            const queries = [Query.orderDesc('$createdAt')];
+            if (!isAdmin) queries.push(Query.equal('client_id', user.$id));
             const res = await databases.listDocuments(dbId, 'tickets', queries);
             setTickets(res.documents);
-        } catch (error) {
-            console.error("Error fetching tickets:", error);
-        } finally {
-            setLoading(false);
-        }
+        } catch (error) { console.error('Error fetching tickets:', error); }
+        finally { setLoading(false); }
     };
 
     useEffect(() => {
         fetchTickets();
-        
-        // Realtime subscription for NEW TICKETS
-        const unsubscribe = client.subscribe(
+        const unsub = client.subscribe(
             `databases.${import.meta.env.VITE_APPWRITE_DATABASE_ID}.collections.tickets.documents`,
             response => {
-                if (response.events.includes('databases.*.collections.*.documents.*.create')) {
+                if (response.events.some(e => e.includes('.create'))) {
                     setTickets(prev => [response.payload, ...prev]);
-                    toast.success("Nuevo ticket recibido", { 
-                        icon: '🎫',
-                        style: { background: '#1a1a1a', color: '#fff', borderRadius: '15px' }
-                    });
+                    if (isAdmin) toast.success('Nuevo ticket recibido', { icon: '🎫', style: { background: '#1a1a1a', color: '#fff', borderRadius: '15px' } });
+                }
+                if (response.events.some(e => e.includes('.update'))) {
+                    setTickets(prev => prev.map(t => t.$id === response.payload.$id ? response.payload : t));
+                    setActiveTicket(prev => prev?.$id === response.payload.$id ? response.payload : prev);
                 }
             }
         );
-
-        return () => unsubscribe();
-    }, []);
+        return () => unsub();
+    }, [isAdmin]);
 
     const selectTicket = async (ticket) => {
         setActiveTicket(ticket);
+        if (unsubMessagesRef.current) unsubMessagesRef.current();
         try {
             const dbId = import.meta.env.VITE_APPWRITE_DATABASE_ID;
             const res = await databases.listDocuments(dbId, 'messages', [
-                Query.equal('ticket_id', ticket.$id),
-                Query.orderAsc('$createdAt')
+                Query.equal('ticket_id', ticket.$id), Query.orderAsc('$createdAt')
             ]);
             setMessages(res.documents);
-
-            // Subscribe to messages for THIS ticket
-            client.subscribe(
+            unsubMessagesRef.current = client.subscribe(
                 `databases.${dbId}.collections.messages.documents`,
                 response => {
                     if (response.payload.ticket_id === ticket.$id) {
-                        setMessages(prev => {
-                            if (prev.find(m => m.$id === response.payload.$id)) return prev;
-                            return [...prev, response.payload];
-                        });
-                        if (response.payload.sender_id !== user.$id) {
-                            new Audio('https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3').play().catch(() => {});
-                        }
+                        setMessages(prev => prev.find(m => m.$id === response.payload.$id) ? prev : [...prev, response.payload]);
                     }
                 }
             );
-        } catch (error) {
-            console.error("Error fetching messages:", error);
-        }
+        } catch (error) { console.error('Error fetching messages:', error); }
     };
 
     const handleSendMessage = async (e) => {
         e.preventDefault();
-        if (!newMessage.trim() || !activeTicket) return;
-
+        if (!newMessage.trim() || !activeTicket || activeTicket.status === 'closed') return;
         try {
             setSending(true);
             const dbId = import.meta.env.VITE_APPWRITE_DATABASE_ID;
-            const msg = {
+            await databases.createDocument(dbId, 'messages', ID.unique(), {
                 ticket_id: activeTicket.$id,
                 sender_id: user.$id,
-                sender_name: user.name,
+                sender_name: dbUser?.full_name || user.name,
                 content: newMessage,
                 role: dbUser?.user_type || 'client'
-            };
-            
-            await databases.createDocument(dbId, 'messages', ID.unique(), msg);
+            });
             setNewMessage('');
-            
-            // Update ticket status if admin is replying
-            if (dbUser?.user_type === 'admin' && activeTicket.status === 'open') {
+            if (isAdmin && activeTicket.status === 'open') {
                 await databases.updateDocument(dbId, 'tickets', activeTicket.$id, { status: 'answered' });
             }
-        } catch (error) {
-            toast.error("Error al enviar mensaje");
-        } finally {
-            setSending(false);
-        }
+        } catch { toast.error('Error al enviar mensaje'); }
+        finally { setSending(false); }
+    };
+
+    const handleCloseTicket = async (ticketId) => {
+        if (!window.confirm('¿Cerrar este ticket? El cliente no podrá responder más.')) return;
+        try {
+            setClosingId(ticketId);
+            await databases.updateDocument(import.meta.env.VITE_APPWRITE_DATABASE_ID, 'tickets', ticketId, { status: 'closed' });
+            toast.success('Ticket cerrado');
+        } catch { toast.error('Error al cerrar ticket'); }
+        finally { setClosingId(null); }
     };
 
     const createTicket = async () => {
-        const subject = prompt("¿Cuál es el motivo de tu consulta?");
-        if (!subject) return;
-
+        const subject = prompt('¿Cuál es el motivo de tu consulta?');
+        if (!subject?.trim()) return;
         try {
             const dbId = import.meta.env.VITE_APPWRITE_DATABASE_ID;
             const ticket = await databases.createDocument(dbId, 'tickets', ID.unique(), {
                 client_id: user.$id,
-                client_name: user.name,
-                subject: subject,
+                client_name: dbUser?.full_name || user.name,
+                subject: subject.trim(),
                 status: 'open'
             });
-            toast.success("Ticket abierto correctamente");
+            toast.success('Ticket abierto');
             selectTicket(ticket);
-        } catch (error) {
-            toast.error("Error al crear ticket");
-        }
+        } catch { toast.error('Error al crear ticket'); }
     };
+
+    const statusStyle = (s) => ({
+        open:     'bg-primary/10 text-primary border-primary/20',
+        answered: 'bg-secondary/10 text-secondary border-secondary/20',
+        closed:   'bg-gray-500/10 text-gray-400 border-gray-500/20',
+    }[s] || 'bg-white/5 text-gray-500 border-white/10');
+
+    const statusLabel = (s) => ({ open: 'Abierto', answered: 'Respondido', closed: 'Cerrado' }[s] || s);
+    const openCount = tickets.filter(t => t.status === 'open').length;
 
     return (
         <div className="h-[calc(100vh-140px)] flex gap-6 overflow-hidden pb-4">
-            {/* Sidebar de Tickets */}
-            <div className="w-80 flex flex-col bg-card/40 backdrop-blur-3xl border border-white/10 rounded-[2.5rem] overflow-hidden shadow-2xl relative">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-3xl" />
-                
-                <div className="p-8 border-b border-white/5 flex justify-between items-center relative z-10">
+            {/* Sidebar */}
+            <div className="w-80 flex flex-col bg-card/40 backdrop-blur-3xl border border-white/10 rounded-[2.5rem] overflow-hidden shadow-2xl">
+                <div className="p-6 border-b border-white/5 flex justify-between items-center">
                     <div>
-                        <h2 className="text-xl font-black text-white italic uppercase tracking-tighter">Soporte</h2>
+                        <h2 className="text-xl font-black text-white italic uppercase tracking-tighter flex items-center gap-2">
+                            Soporte
+                            {isAdmin && openCount > 0 && (
+                                <span className="text-[10px] font-black bg-primary text-white px-2 py-0.5 rounded-full">{openCount}</span>
+                            )}
+                        </h2>
                         <p className="text-[9px] text-gray-500 font-black uppercase tracking-widest mt-0.5">Centro de Ayuda</p>
                     </div>
-                    {dbUser?.user_type === 'client' && (
+                    {!isAdmin && (
                         <button onClick={createTicket} className="p-3 bg-primary hover:bg-primary-glow text-white rounded-2xl transition shadow-glow">
                             <Plus size={18} />
                         </button>
                     )}
                 </div>
-                
-                <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar relative z-10">
+                <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
                     {loading ? (
                         <div className="flex justify-center py-20 text-primary"><Loader2 className="animate-spin" /></div>
                     ) : tickets.length === 0 ? (
@@ -167,89 +155,104 @@ export const TicketsSystem = () => {
                             <MessageSquare size={32} />
                             <p className="text-[10px] font-black uppercase tracking-widest">Sin casos activos</p>
                         </div>
-                    ) : (
-                        tickets.map(t => (
-                            <div 
-                                key={t.$id} 
-                                onClick={() => selectTicket(t)}
-                                className={`group p-5 rounded-[1.8rem] cursor-pointer transition-all duration-300 flex items-center gap-4 border relative overflow-hidden ${activeTicket?.$id === t.$id ? 'bg-primary/10 border-primary/30 shadow-glow shadow-primary/5' : 'bg-white/3 border-white/5 hover:border-white/10'}`}
-                            >
-                                <div className={`w-2.5 h-2.5 rounded-full ${t.status === 'open' ? 'bg-primary shadow-[0_0_12px_rgba(235,28,36,0.5)] animate-pulse' : 'bg-gray-700'}`}></div>
-                                <div className="flex-1 overflow-hidden">
-                                    <h4 className="text-sm font-black text-white truncate italic uppercase tracking-tight group-hover:text-primary transition">{t.subject}</h4>
-                                    <p className="text-[9px] text-gray-500 font-bold uppercase tracking-widest mt-1">{t.client_name}</p>
+                    ) : tickets.map(t => (
+                        <div key={t.$id} onClick={() => selectTicket(t)}
+                            className={`group p-4 rounded-2xl cursor-pointer transition-all flex items-start gap-3 border ${activeTicket?.$id === t.$id ? 'bg-primary/10 border-primary/30' : 'bg-white/3 border-white/5 hover:border-white/10'}`}>
+                            <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${t.status === 'open' ? 'bg-primary animate-pulse' : t.status === 'answered' ? 'bg-secondary' : 'bg-gray-600'}`} />
+                            <div className="flex-1 min-w-0">
+                                <h4 className="text-sm font-black text-white truncate italic uppercase tracking-tight">{t.subject}</h4>
+                                <div className="flex items-center justify-between mt-1">
+                                    <p className="text-[9px] text-gray-500 font-bold uppercase truncate">{t.client_name}</p>
+                                    <span className={`text-[8px] font-black px-1.5 py-0.5 rounded border ${statusStyle(t.status)}`}>{statusLabel(t.status)}</span>
                                 </div>
-                                <ChevronRight size={14} className={`transition-transform duration-300 ${activeTicket?.$id === t.$id ? 'translate-x-1 text-primary' : 'text-gray-700'}`} />
                             </div>
-                        ))
-                    )}
+                        </div>
+                    ))}
                 </div>
             </div>
 
-            {/* Area de Chat */}
-            <div className="flex-1 flex flex-col bg-card/40 backdrop-blur-3xl border border-white/10 rounded-[2.5rem] overflow-hidden shadow-2xl relative">
-                <div className="absolute bottom-0 left-0 w-96 h-96 bg-primary/5 rounded-full blur-[120px] pointer-events-none" />
-                
+            {/* Chat */}
+            <div className="flex-1 flex flex-col bg-card/40 backdrop-blur-3xl border border-white/10 rounded-[2.5rem] overflow-hidden shadow-2xl">
                 {activeTicket ? (
                     <>
-                        <div className="p-8 border-b border-white/5 bg-white/3 flex justify-between items-center relative z-10">
-                            <div className="flex items-center gap-6">
-                                <div className="w-14 h-14 bg-primary/20 rounded-2xl flex items-center justify-center text-primary-glow font-black text-2xl border border-primary/20 italic shadow-glow">
-                                    #
-                                </div>
+                        <div className="p-6 border-b border-white/5 bg-white/3 flex justify-between items-center">
+                            <div className="flex items-center gap-4">
+                                <div className="w-12 h-12 bg-primary/20 rounded-2xl flex items-center justify-center text-primary font-black text-xl border border-primary/20">#</div>
                                 <div>
-                                    <h3 className="text-2xl font-black text-white italic uppercase tracking-tighter">{activeTicket.subject}</h3>
-                                    <p className="text-xs text-gray-500 font-medium">Chat interactivo con {activeTicket.client_name}</p>
+                                    <h3 className="text-xl font-black text-white italic uppercase tracking-tighter">{activeTicket.subject}</h3>
+                                    <p className="text-xs text-gray-500">con {activeTicket.client_name}</p>
                                 </div>
                             </div>
-                            <div className={`px-5 py-2 rounded-full text-[10px] font-black uppercase tracking-[0.2em] border italic ${activeTicket.status === 'open' ? 'bg-primary/10 text-primary border-primary/20' : 'bg-success/10 text-success border-success/20'}`}>
-                                {activeTicket.status === 'open' ? 'En espera' : 'Resuelto'}
+                            <div className="flex items-center gap-3">
+                                <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border ${statusStyle(activeTicket.status)}`}>
+                                    {statusLabel(activeTicket.status)}
+                                </span>
+                                {isAdmin && activeTicket.status !== 'closed' && (
+                                    <button onClick={() => handleCloseTicket(activeTicket.$id)}
+                                        disabled={closingId === activeTicket.$id}
+                                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-black uppercase bg-white/5 border border-white/10 text-gray-400 hover:text-white hover:border-white/30 transition">
+                                        {closingId === activeTicket.$id ? <Loader2 size={12} className="animate-spin" /> : <><CheckCircle size={12} /> Cerrar</>}
+                                    </button>
+                                )}
                             </div>
                         </div>
 
-                        <div className="flex-1 overflow-y-auto p-10 space-y-8 custom-scrollbar relative z-10">
+                        <div className="flex-1 overflow-y-auto p-8 space-y-6 custom-scrollbar">
+                            {messages.length === 0 && (
+                                <div className="text-center py-10 text-gray-600">
+                                    <MessageSquare size={32} className="mx-auto mb-3 opacity-30" />
+                                    <p className="text-sm">No hay mensajes aún. Iniciá la conversación.</p>
+                                </div>
+                            )}
                             {messages.map((m, idx) => (
-                                <div key={idx} className={`flex ${m.sender_id === user.$id ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-2`}>
-                                    <div className={`max-w-[65%] p-6 rounded-[2rem] relative shadow-2xl transition hover:scale-[1.02] duration-300 ${m.sender_id === user.$id ? 'bg-primary text-white rounded-tr-none ring-4 ring-primary/10' : 'bg-white/5 text-gray-200 border border-white/10 rounded-tl-none ring-4 ring-white/5'}`}>
-                                        <div className="flex justify-between items-center mb-2 gap-4">
-                                            <span className="text-[9px] font-black uppercase tracking-widest opacity-60 italic">{m.sender_name}</span>
-                                            <span className="text-[9px] font-bold opacity-30 italic">{new Date(m.$createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                <div key={idx} className={`flex ${m.sender_id === user.$id ? 'justify-end' : 'justify-start'}`}>
+                                    <div className={`max-w-[65%] p-5 rounded-[1.8rem] shadow-lg ${m.sender_id === user.$id ? 'bg-primary text-white rounded-tr-none' : 'bg-white/5 text-gray-200 border border-white/10 rounded-tl-none'}`}>
+                                        <div className="flex justify-between items-center mb-1.5 gap-4">
+                                            <span className="text-[9px] font-black uppercase opacity-60">{m.sender_name}</span>
+                                            <span className="text-[9px] opacity-30">{new Date(m.$createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                                         </div>
-                                        <p className="text-sm font-medium leading-relaxed tracking-tight">{m.content}</p>
+                                        <p className="text-sm font-medium leading-relaxed">{m.content}</p>
                                     </div>
                                 </div>
                             ))}
                             <div ref={messagesEndRef} />
                         </div>
 
-                        <form onSubmit={handleSendMessage} className="p-8 bg-black/30 border-t border-white/5 flex gap-4 relative z-10">
-                            <input 
-                                type="text"
-                                placeholder="Redactar mensaje..."
-                                value={newMessage}
-                                onChange={e => setNewMessage(e.target.value)}
-                                className="flex-1 bg-white/5 border border-white/10 rounded-2xl px-6 py-5 text-white font-bold outline-none focus:border-primary transition shadow-inner"
-                            />
-                            <button 
-                                type="submit" 
-                                disabled={sending || !newMessage.trim()}
-                                className="bg-primary hover:bg-primary-glow text-white w-16 h-16 rounded-2xl flex items-center justify-center shadow-glow transition disabled:opacity-50 group ring-4 ring-primary/20"
-                            >
-                                {sending ? <Loader2 className="animate-spin" /> : <Send size={28} className="group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />}
-                            </button>
+                        <form onSubmit={handleSendMessage} className="p-6 bg-black/30 border-t border-white/5 flex gap-3">
+                            {activeTicket.status === 'closed' ? (
+                                <div className="flex-1 flex items-center justify-center gap-2 text-gray-600 text-sm py-3">
+                                    <X size={16} /> Este ticket está cerrado
+                                </div>
+                            ) : (
+                                <>
+                                    <input type="text" placeholder="Redactar mensaje..." value={newMessage}
+                                        onChange={e => setNewMessage(e.target.value)}
+                                        className="flex-1 bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-white font-bold outline-none focus:border-primary transition" />
+                                    <button type="submit" disabled={sending || !newMessage.trim()}
+                                        className="bg-primary hover:bg-primary-glow text-white w-14 h-14 rounded-2xl flex items-center justify-center shadow-glow transition disabled:opacity-50">
+                                        {sending ? <Loader2 className="animate-spin" size={20} /> : <Send size={20} />}
+                                    </button>
+                                </>
+                            )}
                         </form>
                     </>
                 ) : (
-                    <div className="flex-1 flex flex-col items-center justify-center text-center p-20 relative z-10">
-                        <div className="w-28 h-28 bg-primary/10 rounded-[2.5rem] flex items-center justify-center mb-8 border border-primary/20 shadow-glow">
-                            <MessageSquare size={48} className="text-primary opacity-60 animate-pulse" />
+                    <div className="flex-1 flex flex-col items-center justify-center text-center p-16">
+                        <div className="w-24 h-24 bg-primary/10 rounded-[2rem] flex items-center justify-center mb-6 border border-primary/20">
+                            <MessageSquare size={40} className="text-primary opacity-60 animate-pulse" />
                         </div>
-                        <h3 className="text-3xl font-black text-white italic uppercase tracking-tighter">Terminal de Mensajería</h3>
-                        <p className="text-gray-500 max-w-sm mt-6 font-medium text-lg leading-snug">
-                            Selecciona una conversación del panel lateral o inicia un nuevo caso de soporte.
+                        <h3 className="text-2xl font-black text-white italic uppercase tracking-tighter">Soporte en Tiempo Real</h3>
+                        <p className="text-gray-500 max-w-xs mt-4 text-sm">
+                            {isAdmin ? 'Seleccioná un ticket del panel para responder.' : 'Seleccioná una conversación o abrí un nuevo caso.'}
                         </p>
-                        <div className="mt-12 flex items-center gap-3 text-[10px] font-black uppercase tracking-[0.2em] text-primary bg-primary/5 px-6 py-3 rounded-full border border-primary/10">
-                            <AlertCircle size={16} /> Enlace de Soporte en Tiempo Real Activo
+                        {!isAdmin && (
+                            <button onClick={createTicket}
+                                className="mt-8 flex items-center gap-2 bg-primary hover:bg-primary-glow text-white px-6 py-3 rounded-2xl font-black shadow-glow transition">
+                                <Plus size={18} /> Nuevo Ticket
+                            </button>
+                        )}
+                        <div className="mt-6 flex items-center gap-3 text-[10px] font-black uppercase tracking-[0.2em] text-primary bg-primary/5 px-6 py-3 rounded-full border border-primary/10">
+                            <AlertCircle size={16} /> Soporte Realtime Activo
                         </div>
                     </div>
                 )}
@@ -257,10 +260,3 @@ export const TicketsSystem = () => {
         </div>
     );
 };
-
-const Plus = ({ size = 20, className = "" }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className={className}>
-        <line x1="12" y1="5" x2="12" y2="19"></line>
-        <line x1="5" y1="12" x2="19" y2="12"></line>
-    </svg>
-);
