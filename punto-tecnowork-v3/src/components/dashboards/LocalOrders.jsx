@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { databases } from '../../lib/appwrite';
 import { Query, ID } from 'appwrite';
 import toast from 'react-hot-toast';
-import { Loader2, Play, CheckCircle, Pause, Search, Package, FileText, Maximize, Palette, Printer } from 'lucide-react';
+import { Loader2, CheckCircle, Search, Package, FileText, Maximize, Palette, Printer } from 'lucide-react';
+import { PrintWizard } from './PrintWizard';
 
 export const LocalOrders = ({ locationId }) => {
     const [orders, setOrders] = useState([]);
@@ -10,6 +11,7 @@ export const LocalOrders = ({ locationId }) => {
     const [selectedOrder, setSelectedOrder] = useState(null);
     const [isUpdating, setIsUpdating] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
+    const [printWizardOrder, setPrintWizardOrder] = useState(null);
 
     const fetchOrders = async () => {
         if (!locationId) return;
@@ -247,7 +249,9 @@ export const LocalOrders = ({ locationId }) => {
                             )}
                             <div className="flex flex-col gap-3 pt-2">
                                 {selectedOrder.status === 'pendiente' && (
-                                    <button onClick={() => updateStatus(selectedOrder.$id, 'en_proceso')} disabled={isUpdating}
+                                    <button
+                                        onClick={() => { setSelectedOrder(null); setPrintWizardOrder(selectedOrder); }}
+                                        disabled={isUpdating}
                                         className="w-full bg-primary hover:bg-primary-glow text-white font-black py-4 rounded-2xl shadow-glow flex items-center justify-center gap-3 transition text-lg italic tracking-tighter">
                                         <Printer size={20} /> INICIAR IMPRESIÓN
                                     </button>
@@ -274,6 +278,19 @@ export const LocalOrders = ({ locationId }) => {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {/* Print Wizard */}
+            {printWizardOrder && (
+                <PrintWizard
+                    order={printWizardOrder}
+                    isUpdating={isUpdating}
+                    onCancel={() => setPrintWizardOrder(null)}
+                    onConfirm={async () => {
+                        await updateStatus(printWizardOrder.$id, 'en_proceso');
+                        setPrintWizardOrder(null);
+                    }}
+                />
             )}
         </div>
     );
