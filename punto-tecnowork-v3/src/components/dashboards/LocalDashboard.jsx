@@ -47,9 +47,13 @@ export const LocalDashboard = ({ locationId }) => {
             setLocationName(locRes.name);
             const orders = ordersRes.documents;
             const today = new Date().toLocaleDateString();
-            const todayOrders      = orders.filter(o => new Date(o.$createdAt).toLocaleDateString() === today);
-            const todayDelivered   = todayOrders.filter(o => o.status === 'entregado');
-            const allDelivered     = orders.filter(o => o.status === 'entregado');
+            const todayOrders    = orders.filter(o => new Date(o.$createdAt).toLocaleDateString() === today);
+            // todayDelivered usa $updatedAt porque es cuándo se marcó como entregado
+            const todayDelivered = orders.filter(o =>
+                o.status === 'entregado' &&
+                new Date(o.$updatedAt).toLocaleDateString() === today
+            );
+            const allDelivered   = orders.filter(o => o.status === 'entregado');
             setStats({
                 todayOrders:       todayOrders.length,
                 todayRevenue:      todayDelivered.reduce((s, o) => s + (o.total_price || 0), 0),
@@ -124,7 +128,7 @@ export const LocalDashboard = ({ locationId }) => {
                 <div className="flex items-center gap-4 relative z-10">
                     <div className="text-right hidden sm:block">
                         <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Último Latido</p>
-                        <p className="text-lg font-bold text-white font-mono italic">{new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                        <p className="text-lg font-bold text-white font-mono italic">{new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false })}</p>
                     </div>
                     <button onClick={fetchStats} className="bg-white/5 hover:bg-white/10 text-white p-3.5 rounded-2xl border border-white/10 transition group shadow-xl">
                         <TrendingUp size={22} className="group-hover:scale-110 transition-transform text-primary" />
