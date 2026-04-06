@@ -18,27 +18,39 @@ export const AdminReports = () => {
                 import.meta.env.VITE_APPWRITE_DATABASE_ID, 'orders', [Query.limit(1000)]
             );
             const orders = ordersRes.documents;
-            const revenue = orders.reduce((sum, o) => sum + (o.total_price || 0), 0);
+
+            // Solo las entregadas cuentan como facturación real
+            const delivered = orders.filter(o => o.status === 'entregado');
+            const revenue = delivered.reduce((sum, o) => sum + (o.total_price || 0), 0);
+            const avgTicket = delivered.length > 0 ? revenue / delivered.length : 0;
+
             setStats({
-                totalOrders: orders.length, totalRevenue: revenue,
-                avgTicket: orders.length > 0 ? revenue / orders.length : 0,
+                totalOrders: orders.length,
+                totalRevenue: revenue,
+                avgTicket,
                 activeLocals: new Set(orders.map(o => o.location_id).filter(Boolean)).size
             });
+
+            // Gráfico diario: solo ingresos de entregadas
             const daily = {};
-            orders.forEach(o => {
+            delivered.forEach(o => {
                 const d = new Date(o.$createdAt).toLocaleDateString();
                 if (!daily[d]) daily[d] = { date: d, orders: 0, revenue: 0 };
                 daily[d].orders++;
                 daily[d].revenue += o.total_price || 0;
             });
             setDailyData(Object.values(daily).slice(-7));
+
+            // Facturación por sucursal: solo entregadas
             const locals = {};
-            orders.forEach(o => {
+            delivered.forEach(o => {
                 const n = o.location_name || 'Sin sucursal';
                 if (!locals[n]) locals[n] = { name: n, revenue: 0 };
                 locals[n].revenue += o.total_price || 0;
             });
             setLocalData(Object.values(locals));
+
+            // Estado de TODAS las órdenes (para el pie chart)
             const sm = {};
             orders.forEach(o => {
                 const s = o.status || 'pendiente';
@@ -59,7 +71,7 @@ export const AdminReports = () => {
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
                     <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-hero bg-clip-text text-transparent">Reportes e Inteligencia</h1>
-                    <p className="text-gray-400 mt-2">Analítica avanzada del sistema.</p>
+                    <p className="text-gray-400 mt-2">Facturación basada en órdenes <span className="text-success font-semibold">entregadas</span>.</p>
                 </div>
                 <div className="flex gap-2">
                     <button className="flex items-center gap-2 bg-white/5 border border-white/10 px-3 py-2 rounded-xl text-gray-300 text-sm"><Calendar size={16}/> Fechas</button>
@@ -68,10 +80,10 @@ export const AdminReports = () => {
             </div>
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
                 {[
-                    { label: 'Órdenes',     value: stats.totalOrders,                        icon: Package,    color: 'text-primary'   },
-                    { label: 'Facturación', value: `$${stats.totalRevenue.toLocaleString()}`,  icon: DollarSign, color: 'text-success'   },
-                    { label: 'Ticket Prom.',value: `$${stats.avgTicket.toFixed(0)}`,           icon: TrendingUp, color: 'text-yellow-400'},
-                    { label: 'Sucursales',  value: stats.activeLocals,                        icon: MapPin,     color: 'text-secondary' },
+                    { label: 'Órdenes Totales', value: stats.totalOrders,                       icon: Package,    color: 'text-primary'    },
+                    { label: 'Facturado',        value: `$${stats.totalRevenue.toLocaleString()}`, icon: DollarSign, color: 'text-success', sub: 'solo entregadas' },
+                    { label: 'Ticket Promedio',  value: `$${stats.avgTicket.toFixed(0)}`,          icon: TrendingUp, color: 'text-yellow-400', sub: 'entregadas' },
+                    { label: 'Sucursales',       value: stats.activeLocals,                       icon: MapPin,     color: 'text-secondary'  },
                 ].map((kpi, idx) => (
                     <div key={idx} className="bg-card/50 border border-white/10 rounded-2xl p-4 sm:p-6 shadow-glow">
                         <div className="flex justify-between items-center mb-2">
@@ -79,13 +91,15 @@ export const AdminReports = () => {
                             <kpi.icon size={16} className={kpi.color}/>
                         </div>
                         <div className="text-xl sm:text-2xl font-black text-white">{loading ? '...' : kpi.value}</div>
+                        {kpi.sub && <p className="text-[9px] text-gray-600 mt-1 uppercase tracking-widest">{kpi.sub}</p>}
                     </div>
                 ))}
             </div>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="bg-card/50 border border-white/10 rounded-2xl p-4 sm:p-6 shadow-glow">
-                    <h3 className="text-base font-bold text-white mb-4">Ingresos por Día</h3>
-                    <div className="h-56 sm:h-64"><ResponsiveContainer width="100%" height="100%"><LineChart data={dailyData}><CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" vertical={false}/><XAxis dataKey="date" stroke="#666" fontSize={9} tickLine={false} axisLine={false}/><YAxis stroke="#666" fontSize={9} tickLine={false} axisLine={false}/><Tooltip contentStyle={tt}/><Line type="monotone" dataKey="revenue" stroke="#EB1C24" strokeWidth={2} dot={{ r: 3, fill: '#EB1C24' }}/></LineChart></ResponsiveContainer></div>
+                    <h3 className="text-base font-bold text-white mb-1">Ingresos por Día</h3>
+                    <p className="text-[10px] text-gray-600 mb-4 uppercase tracking-widest">Solo órdenes entregadas</p>
+                    <div className="h-56 sm:h-64"><ResponsiveContainer width="100%" height="100%"><LineChart data={dailyData}><CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" vertical={false}/><XAxis dataKey="date" stroke="#666" fontSize={9} tickLine={false} axisLine={false}/><YAxis stroke="#666" fontSize={9} tickLine={false} axisLine={false}/><Tooltip contentStyle={tt}/><Line type="monotone" dataKey="revenue" stroke="#A4CC39" strokeWidth={2} dot={{ r: 3, fill: '#A4CC39' }}/></LineChart></ResponsiveContainer></div>
                 </div>
                 <div className="bg-card/50 border border-white/10 rounded-2xl p-4 sm:p-6 shadow-glow">
                     <h3 className="text-base font-bold text-white mb-4">Estado de Órdenes</h3>
@@ -95,7 +109,8 @@ export const AdminReports = () => {
                     </div>
                 </div>
                 <div className="bg-card/50 border border-white/10 rounded-2xl p-4 sm:p-6 shadow-glow lg:col-span-2">
-                    <h3 className="text-base font-bold text-white mb-4">Facturación por Sucursal</h3>
+                    <h3 className="text-base font-bold text-white mb-1">Facturación por Sucursal</h3>
+                    <p className="text-[10px] text-gray-600 mb-4 uppercase tracking-widest">Solo órdenes entregadas</p>
                     <div className="h-56 sm:h-64"><ResponsiveContainer width="100%" height="100%"><BarChart data={localData}><CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" vertical={false}/><XAxis dataKey="name" stroke="#666" fontSize={9} tickLine={false} axisLine={false}/><YAxis stroke="#666" fontSize={9} tickLine={false} axisLine={false}/><Tooltip contentStyle={tt}/><Bar dataKey="revenue" fill="#0093D8" radius={[6, 6, 0, 0]}/></BarChart></ResponsiveContainer></div>
                 </div>
             </div>
