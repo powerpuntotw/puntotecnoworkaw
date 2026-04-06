@@ -47,19 +47,18 @@ export const LocalDashboard = ({ locationId }) => {
             setLocationName(locRes.name);
             const orders = ordersRes.documents;
             const today = new Date().toLocaleDateString();
-            const todayOrders = orders.filter(o => new Date(o.$createdAt).toLocaleDateString() === today);
+            const todayOrders      = orders.filter(o => new Date(o.$createdAt).toLocaleDateString() === today);
+            const todayDelivered   = todayOrders.filter(o => o.status === 'entregado');
+            const allDelivered     = orders.filter(o => o.status === 'entregado');
             setStats({
-                todayOrders: todayOrders.length,
-                todayRevenue: todayOrders.reduce((s, o) => s + (o.total_price || 0), 0),
-                pending:    orders.filter(o => o.status === 'pendiente').length,
-                processing: orders.filter(o => o.status === 'en_proceso').length,
-                ready:      orders.filter(o => o.status === 'listo').length,
-                delivered:  orders.filter(o => o.status === 'entregado').length,
-                weeklyRevenue: orders.reduce((s, o) => s + (o.total_price || 0), 0),
-                // Puntos reales: suma de points_earned de órdenes entregadas
-                totalPointsEarned: orders
-                    .filter(o => o.status === 'entregado')
-                    .reduce((s, o) => s + (o.points_earned || 0), 0)
+                todayOrders:       todayOrders.length,
+                todayRevenue:      todayDelivered.reduce((s, o) => s + (o.total_price || 0), 0),
+                pending:           orders.filter(o => o.status === 'pendiente').length,
+                processing:        orders.filter(o => o.status === 'en_proceso').length,
+                ready:             orders.filter(o => o.status === 'listo').length,
+                delivered:         allDelivered.length,
+                weeklyRevenue:     allDelivered.reduce((s, o) => s + (o.total_price || 0), 0),
+                totalPointsEarned: allDelivered.reduce((s, o) => s + (o.points_earned || 0), 0)
             });
         } catch (error) {
             console.error('Error fetching local stats:', error);
