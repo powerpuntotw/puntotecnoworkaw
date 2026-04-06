@@ -25,11 +25,11 @@ export const LocalDashboard = ({ locationId }) => {
         };
         const handleVisibility = () => {
             if (document.hidden) clearInterval(heartbeatRef.current);
-            else { sendHeartbeat(); heartbeatRef.current = setInterval(sendHeartbeat, 180000); }
+            else { sendHeartbeat(); heartbeatRef.current = setInterval(sendHeartbeat, 60000); }
         };
         document.addEventListener('visibilitychange', handleVisibility);
         sendHeartbeat();
-        heartbeatRef.current = setInterval(sendHeartbeat, 180000);
+        heartbeatRef.current = setInterval(sendHeartbeat, 60000);
         return () => { document.removeEventListener('visibilitychange', handleVisibility); clearInterval(heartbeatRef.current); };
     }, [locationId]);
 

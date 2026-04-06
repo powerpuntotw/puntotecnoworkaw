@@ -29,11 +29,12 @@ const DarkSelect = ({ value, onChange, children }) => (
     </select>
 );
 
-// Una sucursal es "online" si su last_active_at fue hace menos de 180 segundos
+// Una sucursal es "online" si su last_active_at fue hace menos de 300 segundos (5 min)
+// El heartbeat del local dispara cada 60s, así hay un margen 5x
 const isOnline = (lastActiveAt) => {
     if (!lastActiveAt) return false;
     const diff = (Date.now() - new Date(lastActiveAt).getTime()) / 1000;
-    return diff < 180;
+    return diff < 300;
 };
 
 // Tiempo relativo legible: "hace 2 min", "hace 5 seg", etc.
