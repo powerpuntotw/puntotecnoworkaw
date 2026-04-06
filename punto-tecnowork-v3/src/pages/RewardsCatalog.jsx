@@ -79,7 +79,7 @@ export const RewardsCatalog = () => {
                     </div>
                     <div className="bg-white/5 border border-white/10 rounded-[28px] px-10 py-6 flex flex-col items-center shadow-inner">
                         <Star size={28} className="text-yellow-400 mb-2" />
-                        <div className="text-4xl font-black text-white">{(points ?? 0).toLocaleString()}</div>
+                        <div className="text-4xl font-black text-white">{(points ?? 0).toLocaleString('es-AR', { hour12: false })}</div>
                         <div className="text-[10px] text-gray-500 uppercase tracking-[0.2em] font-bold mt-1">Puntos Disponibles</div>
                     </div>
                 </div>
@@ -110,7 +110,7 @@ export const RewardsCatalog = () => {
                                         <Gift size={56} className="text-gray-700"/>
                                     )}
                                     <div className="absolute top-3 right-3 bg-black/60 backdrop-blur-sm px-3 py-1 rounded-full text-xs font-black text-white border border-white/20">
-                                        {cost.toLocaleString()} pts
+                                        {cost.toLocaleString('es-AR', { hour12: false })} pts
                                     </div>
                                     {canRedeem && (
                                         <div className="absolute top-3 left-3 bg-success/80 px-2 py-1 rounded-full text-[9px] font-black text-white uppercase flex items-center gap-1">
@@ -127,7 +127,7 @@ export const RewardsCatalog = () => {
                                         className={`w-full py-3.5 rounded-2xl font-black text-xs uppercase tracking-widest transition flex items-center justify-center gap-2 ${canRedeem ? 'bg-primary hover:bg-primary-glow text-white shadow-glow' : 'bg-white/5 text-gray-600 border border-white/10 cursor-not-allowed'}`}>
                                         {processing ? <Loader2 className="animate-spin" size={16}/> : canRedeem
                                             ? <><span>Canjear Ahora</span><ArrowRight size={14}/></>
-                                            : <span>Faltan {(cost - (points ?? 0)).toLocaleString()} pts</span>
+                                            : <span>Faltan {(cost - (points ?? 0)).toLocaleString('es-AR', { hour12: false })} pts</span>
                                         }
                                     </button>
                                 </div>

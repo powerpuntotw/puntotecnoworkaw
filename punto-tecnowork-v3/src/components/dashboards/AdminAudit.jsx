@@ -84,7 +84,7 @@ export const AdminAudit = () => {
                                         <span className={`text-[10px] font-bold px-2 py-0.5 border rounded-md ${actionStyle(log.action)}`}>{log.action}</span>
                                     </div>
                                     <p className="text-sm text-gray-400">{log.description}</p>
-                                    <div className="flex items-center gap-1 text-xs text-gray-600"><Clock size={11} /> {new Date(log.$createdAt).toLocaleString()}</div>
+                                    <div className="flex items-center gap-1 text-xs text-gray-600"><Clock size={11} /> {new Date(log.$createdAt).toLocaleString('es-AR', { hour12: false })}</div>
                                 </div>
                             ))}
                         </div>
@@ -102,7 +102,7 @@ export const AdminAudit = () => {
                                 <tbody className="divide-y divide-white/5">
                                     {filtered.map(log => (
                                         <tr key={log.$id} className="hover:bg-white/5 transition">
-                                            <td className="py-3 px-5 text-xs text-gray-500"><div className="flex items-center gap-1.5"><Clock size={11} /> {new Date(log.$createdAt).toLocaleString()}</div></td>
+                                            <td className="py-3 px-5 text-xs text-gray-500"><div className="flex items-center gap-1.5"><Clock size={11} /> {new Date(log.$createdAt).toLocaleString('es-AR', { hour12: false })}</div></td>
                                             <td className="py-3 px-5"><div className="flex items-center gap-2 text-sm text-white"><div className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center text-[10px] text-primary border border-primary/30">{(log.admin_name || '?')[0]}</div>{log.admin_name}</div></td>
                                             <td className="py-3 px-5"><span className={`text-[10px] font-bold px-2 py-1 border rounded-md ${actionStyle(log.action)}`}>{log.action}</span></td>
                                             <td className="py-3 px-5 text-sm text-gray-400">{log.description}</td>

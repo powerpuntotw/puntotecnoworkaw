@@ -63,12 +63,12 @@ export const ClientHistory = () => {
                                     <div>
                                         <h4 className="font-bold text-white text-sm">{item.reason}</h4>
                                         <div className="flex items-center gap-1.5 text-xs text-gray-500 mt-0.5">
-                                            <Clock size={11} /> {new Date(item.$createdAt).toLocaleString()}
+                                            <Clock size={11} /> {new Date(item.$createdAt).toLocaleString('es-AR', { hour12: false })}
                                         </div>
                                     </div>
                                 </div>
                                 <div className={`text-xl font-black italic shrink-0 ml-4 ${item.type === 'plus' ? 'text-success' : 'text-red-400'}`}>
-                                    {item.type === 'plus' ? '+' : '-'}{(item.amount || 0).toLocaleString()}
+                                    {item.type === 'plus' ? '+' : '-'}{(item.amount || 0).toLocaleString('es-AR', { hour12: false })}
                                     <span className="text-[10px] not-italic font-normal opacity-60 ml-1">pts</span>
                                 </div>
                             </div>

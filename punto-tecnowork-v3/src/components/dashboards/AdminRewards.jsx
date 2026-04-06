@@ -136,7 +136,7 @@ export const AdminRewards = () => {
                             </div>
                             <div className="flex justify-between items-end">
                                 <div>
-                                    <div className="text-2xl font-black text-warning">{reward.points_required.toLocaleString()} pts</div>
+                                    <div className="text-2xl font-black text-warning">{reward.points_required.toLocaleString('es-AR', { hour12: false })} pts</div>
                                     <div className="text-xs text-gray-400">Stock: {reward.stock}</div>
                                 </div>
                                 <div className="flex gap-2">

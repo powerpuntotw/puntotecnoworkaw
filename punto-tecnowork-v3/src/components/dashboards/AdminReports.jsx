@@ -81,7 +81,7 @@ export const AdminReports = () => {
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
                 {[
                     { label: 'Órdenes Totales', value: stats.totalOrders,                       icon: Package,    color: 'text-primary'    },
-                    { label: 'Facturado',        value: `$${stats.totalRevenue.toLocaleString()}`, icon: DollarSign, color: 'text-success', sub: 'solo entregadas' },
+                    { label: 'Facturado',        value: `$${stats.totalRevenue.toLocaleString('es-AR', { hour12: false })}`, icon: DollarSign, color: 'text-success', sub: 'solo entregadas' },
                     { label: 'Ticket Promedio',  value: `$${stats.avgTicket.toFixed(0)}`,          icon: TrendingUp, color: 'text-yellow-400', sub: 'entregadas' },
                     { label: 'Sucursales',       value: stats.activeLocals,                       icon: MapPin,     color: 'text-secondary'  },
                 ].map((kpi, idx) => (

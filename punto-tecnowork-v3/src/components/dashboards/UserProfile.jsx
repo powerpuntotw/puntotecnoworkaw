@@ -99,7 +99,7 @@ export const UserProfile = () => {
                             <div>
                                 <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Puntos disponibles</p>
                                 <p className="text-3xl font-black text-white italic tracking-tighter leading-none mt-1">
-                                    {points.toLocaleString()}
+                                    {points.toLocaleString('es-AR', { hour12: false })}
                                     <span className="text-xs font-normal text-gray-500 not-italic ml-1">pts</span>
                                 </p>
                             </div>

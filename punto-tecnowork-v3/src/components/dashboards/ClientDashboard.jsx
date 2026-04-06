@@ -53,7 +53,7 @@ export const ClientDashboard = () => {
                             <span className="text-sm font-bold tracking-widest text-gray-400 uppercase">Tier {tier.name}</span>
                         </div>
                         <h1 className="text-4xl font-extrabold text-white tracking-tight">¡Hola, {user?.name?.split(' ')[0]}!</h1>
-                        <p className="text-gray-400 mt-2 font-medium">Tenés <span className="text-primary font-bold">{points.toLocaleString()} puntos</span> para canjear.</p>
+                        <p className="text-gray-400 mt-2 font-medium">Tenés <span className="text-primary font-bold">{points.toLocaleString('es-AR', { hour12: false })} puntos</span> para canjear.</p>
                     </div>
                     <Link to="/rewards" className="group bg-primary hover:bg-primary-glow text-white px-8 py-4 rounded-2xl font-black transition flex items-center gap-3 shadow-glow ring-1 ring-white/10">
                         <Gift size={22} /> Catálogo de Premios <ArrowRight size={18} className="group-hover:translate-x-1 transition" />
@@ -109,7 +109,7 @@ export const ClientDashboard = () => {
                                         <div className="h-10 w-[1px] bg-white/10 hidden sm:block"></div>
                                         <div className="text-right">
                                             {/* FIX: total_price es el campo real del schema */}
-                                            <div className="text-xl font-black text-white italic tracking-tight">${(order.total_price || 0).toLocaleString()}</div>
+                                            <div className="text-xl font-black text-white italic tracking-tight">${(order.total_price || 0).toLocaleString('es-AR', { hour12: false })}</div>
                                             <div className="text-[10px] text-success font-black uppercase">+{order.points_earned || Math.round((order.total_price || 0) * 0.1)} pts</div>
                                         </div>
                                         <div className="p-2 rounded-xl bg-white/5 text-gray-600 group-hover:text-white group-hover:bg-primary transition duration-500">
@@ -127,7 +127,7 @@ export const ClientDashboard = () => {
                         <div className="absolute -bottom-6 -right-6 text-primary/10 group-hover:scale-125 transition duration-700"><Target size={160} /></div>
                         <h3 className="text-xs font-black text-gray-500 uppercase tracking-widest mb-4">Total Acumulado</h3>
                         <div className="text-5xl font-black text-white mb-6 italic tracking-tight leading-none group-hover:text-primary transition duration-500">
-                            {historicalPoints.toLocaleString()}
+                            {historicalPoints.toLocaleString('es-AR', { hour12: false })}
                             <span className="block text-xs not-italic font-bold text-gray-600 uppercase mt-2 tracking-widest">Puntos en Carrera</span>
                         </div>
                     </div>

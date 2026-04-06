@@ -88,7 +88,7 @@ export const AdminDashboard = () => {
     const KPI_CARDS = [
         { label: 'Usuarios Totales',      value: stats.totalUsers,                          icon: Users,      color: 'text-secondary',  link: '/admin/users' },
         { label: 'Órdenes Globales',      value: stats.totalOrders,                         icon: Package,    color: 'text-primary',    link: '/admin/orders' },
-        { label: 'Facturado (entregado)', value: `$${stats.totalRevenue.toLocaleString()}`, icon: DollarSign, color: 'text-success',    link: '/admin/reports' },
+        { label: 'Facturado (entregado)', value: `$${stats.totalRevenue.toLocaleString('es-AR', { hour12: false })}`, icon: DollarSign, color: 'text-success',    link: '/admin/reports' },
         { label: 'Locales Conectados',    value: `${stats.onlineLocals}/${locals.length}`,  icon: Wifi,       color: 'text-secondary',  link: '/admin/locations' }
     ];
 

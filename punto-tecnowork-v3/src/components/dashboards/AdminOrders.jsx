@@ -51,7 +51,7 @@ export const AdminOrders = () => {
                 <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-hero bg-clip-text text-transparent">Gestión de Órdenes</h1>
                 <p className="text-gray-400 mt-1">
                     {orders.length} órdenes totales ·{' '}
-                    <span className="text-success font-semibold">${totalRevenue.toLocaleString()} facturado</span>
+                    <span className="text-success font-semibold">${totalRevenue.toLocaleString('es-AR', { hour12: false })} facturado</span>
                     <span className="text-gray-600 text-xs ml-1">({deliveredCount} entregadas)</span>
                 </p>
             </div>
@@ -97,7 +97,7 @@ export const AdminOrders = () => {
                                     <div className="flex items-center justify-between text-xs text-gray-500">
                                         <span className="flex items-center gap-1"><MapPin size={10} />{o.location_name || 'Sin local'}</span>
                                         <span className={`font-mono font-semibold ${o.status === 'entregado' ? 'text-success' : 'text-gray-500'}`}>
-                                            ${(o.total_price || 0).toLocaleString()}
+                                            ${(o.total_price || 0).toLocaleString('es-AR', { hour12: false })}
                                             {o.status !== 'entregado' && <span className="text-[9px] ml-1 text-gray-600">pendiente</span>}
                                         </span>
                                     </div>
@@ -126,7 +126,7 @@ export const AdminOrders = () => {
                                             <td className="py-3 px-5"><span className={`px-2.5 py-1 rounded-full text-xs font-bold border ${statusStyle(o.status)}`}>{o.status?.toUpperCase() || 'N/A'}</span></td>
                                             <td className="py-3 px-5">
                                                 <span className={`font-mono font-semibold text-sm ${o.status === 'entregado' ? 'text-success' : 'text-gray-500'}`}>
-                                                    ${(o.total_price || 0).toLocaleString()}
+                                                    ${(o.total_price || 0).toLocaleString('es-AR', { hour12: false })}
                                                 </span>
                                                 {o.status !== 'entregado' && (
                                                     <span className="text-[9px] text-gray-600 font-bold uppercase ml-1">pend.</span>

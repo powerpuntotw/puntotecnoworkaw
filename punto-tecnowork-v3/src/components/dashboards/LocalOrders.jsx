@@ -214,7 +214,7 @@ export const LocalOrders = ({ locationId }) => {
                                 </div>
                                 <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
                                     <p className="text-[9px] text-gray-500 uppercase font-black tracking-widest mb-1">Total</p>
-                                    <p className="text-success font-black text-2xl italic tracking-tighter">${(selectedOrder.total_price || 0).toLocaleString()}</p>
+                                    <p className="text-success font-black text-2xl italic tracking-tighter">${(selectedOrder.total_price || 0).toLocaleString('es-AR', { hour12: false })}</p>
                                 </div>
                             </div>
                             <div className="bg-white/5 p-5 rounded-2xl border border-white/5 grid grid-cols-3 gap-3">

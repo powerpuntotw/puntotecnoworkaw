@@ -78,13 +78,13 @@ export const LocalDashboard = ({ locationId }) => {
 
     const KPI_CARDS = [
         { label: 'Órdenes Hoy',    value: stats.todayOrders,                         icon: Package,      color: 'text-primary' },
-        { label: 'Ingresos Hoy',   value: `$${stats.todayRevenue.toLocaleString()}`,  icon: DollarSign,   color: 'text-success' },
+        { label: 'Ingresos Hoy',   value: `$${stats.todayRevenue.toLocaleString('es-AR', { hour12: false })}`,  icon: DollarSign,   color: 'text-success' },
         { label: 'Pendientes',     value: stats.pending,                              icon: Clock,        color: 'text-yellow-400' },
         { label: 'Imprimiendo',    value: stats.processing,                           icon: Loader2,      color: 'text-secondary', spin: true },
         { label: 'Listas',         value: stats.ready,                                icon: CheckCircle2, color: 'text-success' },
         { label: 'Entregadas',     value: stats.delivered,                            icon: CheckCircle2, color: 'text-gray-400' },
-        { label: 'Pts. Generados', value: stats.totalPointsEarned.toLocaleString(),   icon: Star,         color: 'text-yellow-400' },
-        { label: 'Facturación',    value: `$${stats.weeklyRevenue.toLocaleString()}`, icon: DollarSign,   color: 'text-success' },
+        { label: 'Pts. Generados', value: stats.totalPointsEarned.toLocaleString('es-AR', { hour12: false }),   icon: Star,         color: 'text-yellow-400' },
+        { label: 'Facturación',    value: `$${stats.weeklyRevenue.toLocaleString('es-AR', { hour12: false })}`, icon: DollarSign,   color: 'text-success' },
     ];
 
     return (

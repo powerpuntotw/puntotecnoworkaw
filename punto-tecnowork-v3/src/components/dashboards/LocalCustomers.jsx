@@ -76,7 +76,7 @@ export const LocalCustomers = ({ locationId }) => {
                                 <Mail size={11} /> {customer.email}
                             </div>
                             <div className="flex items-center gap-1 text-[10px] text-yellow-400 font-bold mt-1.5 uppercase">
-                                <Star size={10} /> {(customer.points ?? 0).toLocaleString()} pts · {customer.tier || 'Bronze'}
+                                <Star size={10} /> {(customer.points ?? 0).toLocaleString('es-AR', { hour12: false })} pts · {customer.tier || 'Bronze'}
                             </div>
                         </div>
                         <ArrowRight size={16} className="text-gray-700 group-hover:text-primary transition shrink-0" />
