@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { databases } from '../../lib/appwrite';
 import { Query, ID } from 'appwrite';
 import toast from 'react-hot-toast';
-import { Loader2, Plus, Trash2, Camera, Palette, Maximize, DollarSign, ShieldCheck, MapPin, Settings2, CheckCircle, XCircle, Clock, UserCheck } from 'lucide-react';
+import { Loader2, Plus, Trash2, Camera, Palette, Maximize, DollarSign, ShieldCheck, MapPin, Settings2, CheckCircle, XCircle, Clock, UserCheck, Wifi, WifiOff } from 'lucide-react';
 
 const logAudit = async (databases, dbId, action, description) => {
     try {
@@ -29,15 +29,33 @@ const DarkSelect = ({ value, onChange, children }) => (
     </select>
 );
 
+// Una sucursal es "online" si su last_active_at fue hace menos de 180 segundos
+const isOnline = (lastActiveAt) => {
+    if (!lastActiveAt) return false;
+    const diff = (Date.now() - new Date(lastActiveAt).getTime()) / 1000;
+    return diff < 180;
+};
+
+// Tiempo relativo legible: "hace 2 min", "hace 5 seg", etc.
+const timeAgo = (lastActiveAt) => {
+    if (!lastActiveAt) return null;
+    const diff = Math.floor((Date.now() - new Date(lastActiveAt).getTime()) / 1000);
+    if (diff < 60) return `hace ${diff}s`;
+    if (diff < 3600) return `hace ${Math.floor(diff / 60)}min`;
+    return `hace ${Math.floor(diff / 3600)}h`;
+};
+
 export const AdminLocations = () => {
     const [locations, setLocations] = useState([]);
     const [allUsers, setAllUsers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
-    const [isPromoting, setIsPromoting] = useState(null); // userId siendo promovido
+    const [isPromoting, setIsPromoting] = useState(null);
     const [editingLocation, setEditingLocation] = useState(null);
     const [showModal, setShowModal] = useState(false);
     const [showPromotePanel, setShowPromotePanel] = useState(false);
+    // Tick cada 15s para recalcular online/offline sin refetch
+    const [tick, setTick] = useState(0);
 
     const emptyForm = {
         name: '', address: '', phone: '', email: '', manager_id: '',
@@ -67,6 +85,22 @@ export const AdminLocations = () => {
 
     useEffect(() => { fetchData(); }, []);
 
+    // Refrescar last_active_at cada 30s para ver si el local sigue conectado
+    useEffect(() => {
+        const interval = setInterval(async () => {
+            try {
+                const res = await databases.listDocuments(
+                    import.meta.env.VITE_APPWRITE_DATABASE_ID,
+                    'printing_locations',
+                    [Query.limit(100)]
+                );
+                setLocations(res.documents);
+                setTick(t => t + 1);
+            } catch { }
+        }, 30000);
+        return () => clearInterval(interval);
+    }, []);
+
     const openCreateModal = () => {
         setEditingLocation(null);
         setFormData(emptyForm);
@@ -89,7 +123,6 @@ export const AdminLocations = () => {
         setShowModal(true);
     };
 
-    // Promover un cliente a rol local
     const handlePromote = async (userId) => {
         const user = allUsers.find(u => u.$id === userId);
         if (!window.confirm(`¿Promover a "${user?.full_name}" al rol Local?\nPodrá ser asignado como encargado de sucursal.`)) return;
@@ -99,7 +132,6 @@ export const AdminLocations = () => {
             await databases.updateDocument(dbId, 'users', userId, { user_type: 'local' });
             await logAudit(databases, dbId, 'Promover a Local', `${user?.full_name} promovido de client a local`);
             toast.success(`${user?.full_name} ahora tiene rol Local`);
-            // Actualizar estado local sin refetch
             setAllUsers(prev => prev.map(u => u.$id === userId ? { ...u, user_type: 'local' } : u));
         } catch (error) {
             console.error(error);
@@ -117,7 +149,6 @@ export const AdminLocations = () => {
             const dbId = import.meta.env.VITE_APPWRITE_DATABASE_ID;
             const oldManagerId = editingLocation?.manager_id;
             const newManagerId = formData.manager_id;
-
             let finalDoc;
             if (editingLocation) {
                 finalDoc = await databases.updateDocument(dbId, 'printing_locations', editingLocation.$id, formData);
@@ -130,19 +161,14 @@ export const AdminLocations = () => {
                 toast.success("Sucursal creada");
                 await logAudit(databases, dbId, 'Crear Sucursal', `Creó: ${formData.name} en ${formData.address}`);
             }
-
             if (newManagerId && newManagerId !== oldManagerId) {
-                await databases.updateDocument(dbId, 'users', newManagerId, {
-                    user_type: 'local', location_id: finalDoc.$id
-                });
+                await databases.updateDocument(dbId, 'users', newManagerId, { user_type: 'local', location_id: finalDoc.$id });
                 const name = allUsers.find(u => u.$id === newManagerId)?.full_name || newManagerId;
                 toast.success(`${name} asignado como encargado`);
                 await logAudit(databases, dbId, 'Asignar Encargado', `${name} → local, sucursal ${formData.name}`);
             }
             if (oldManagerId && oldManagerId !== newManagerId) {
-                await databases.updateDocument(dbId, 'users', oldManagerId, {
-                    user_type: 'client', location_id: null
-                });
+                await databases.updateDocument(dbId, 'users', oldManagerId, { user_type: 'client', location_id: null });
             }
             setShowModal(false);
             fetchData();
@@ -169,25 +195,33 @@ export const AdminLocations = () => {
         } catch { toast.error("Error al eliminar"); }
     };
 
-    // IDs de managers ya asignados a OTRAS sucursales (no la que se edita)
     const assignedElsewhere = locations
         .filter(l => l.$id !== editingLocation?.$id)
         .map(l => l.manager_id).filter(Boolean);
 
-    // Solo usuarios con rol 'local' y sin asignación a otra sucursal
     const availableLocals = allUsers.filter(u =>
         u.user_type === 'local' && !assignedElsewhere.includes(u.$id)
     );
 
-    // Clientes que podrían ser promovidos a local
     const promotableClients = allUsers.filter(u => u.user_type === 'client');
+
+    // Cuántos locales están online ahora
+    const onlineCount = locations.filter(l => isOnline(l.last_active_at)).length;
 
     return (
         <div className="space-y-8 pb-10">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
                 <div>
                     <h1 className="text-3xl font-black text-white italic tracking-tighter uppercase">Gestión de Sucursales</h1>
-                    <p className="text-gray-400 mt-2 font-medium">Control operativo y técnico de la red PuntoTecnowork.</p>
+                    <p className="text-gray-400 mt-2 font-medium flex items-center gap-2">
+                        Control operativo de la red PuntoTecnowork
+                        {locations.length > 0 && (
+                            <span className={`inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full border ${onlineCount > 0 ? 'text-success bg-success/10 border-success/20' : 'text-gray-500 bg-white/5 border-white/10'}`}>
+                                <span className={`w-1.5 h-1.5 rounded-full ${onlineCount > 0 ? 'bg-success animate-pulse' : 'bg-gray-600'}`} />
+                                {onlineCount}/{locations.length} online
+                            </span>
+                        )}
+                    </p>
                 </div>
                 <button onClick={openCreateModal} className="group bg-primary hover:bg-primary-glow text-white px-8 py-4 rounded-2xl font-black shadow-glow transition flex items-center gap-3 ring-1 ring-white/10">
                     <Plus size={22} className="group-hover:rotate-90 transition-transform" />
@@ -206,48 +240,89 @@ export const AdminLocations = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                     {locations.map(loc => {
                         const manager = allUsers.find(m => m.$id === loc.manager_id);
+                        const online = isOnline(loc.last_active_at);
+                        const lastSeen = timeAgo(loc.last_active_at);
+
                         return (
-                            <div key={loc.$id} className="bg-card/40 backdrop-blur-3xl border border-white/10 rounded-[2.5rem] p-8 shadow-2xl relative overflow-hidden group hover:border-primary/30 transition duration-500">
+                            <div key={loc.$id} className={`bg-card/40 backdrop-blur-3xl border rounded-[2.5rem] p-8 shadow-2xl relative overflow-hidden group transition duration-500 ${online ? 'border-success/20 hover:border-success/40' : 'border-white/10 hover:border-primary/30'}`}>
                                 <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-3xl -mr-10 -mt-10" />
-                                <div className="flex justify-between items-center mb-8 relative z-10">
-                                    <div className="flex items-center gap-2.5">
-                                        <div className={`w-3 h-3 rounded-full ${loc.is_open ? 'bg-success shadow-[0_0_12px_rgba(164,204,57,0.5)]' : 'bg-primary shadow-[0_0_12px_rgba(235,28,36,0.5)]'}`} />
-                                        <span className={`text-[10px] font-black uppercase tracking-[0.2em] ${loc.is_open ? 'text-success' : 'text-primary'}`}>{loc.is_open ? 'Abierto' : 'Cerrado'}</span>
+
+                                {/* Header: estado apertura + estado conexión + acciones */}
+                                <div className="flex justify-between items-center mb-6 relative z-10">
+                                    <div className="flex items-center gap-2">
+                                        {/* Estado apertura */}
+                                        <div className="flex items-center gap-1.5">
+                                            <div className={`w-2.5 h-2.5 rounded-full ${loc.is_open ? 'bg-success shadow-[0_0_10px_rgba(164,204,57,0.5)]' : 'bg-primary shadow-[0_0_10px_rgba(235,28,36,0.5)]'}`} />
+                                            <span className={`text-[9px] font-black uppercase tracking-[0.2em] ${loc.is_open ? 'text-success' : 'text-primary'}`}>
+                                                {loc.is_open ? 'Abierto' : 'Cerrado'}
+                                            </span>
+                                        </div>
+                                        {/* Separador */}
+                                        <span className="text-white/10">·</span>
+                                        {/* Estado conexión del encargado */}
+                                        <div className="flex items-center gap-1">
+                                            {online ? (
+                                                <Wifi size={11} className="text-secondary" />
+                                            ) : (
+                                                <WifiOff size={11} className="text-gray-600" />
+                                            )}
+                                            <span className={`text-[9px] font-black uppercase ${online ? 'text-secondary' : 'text-gray-600'}`}>
+                                                {online ? 'Online' : 'Offline'}
+                                            </span>
+                                        </div>
                                     </div>
                                     <div className="flex gap-2">
-                                        <button onClick={() => openEditModal(loc)} className="p-3 bg-white/5 hover:bg-white/10 rounded-xl transition text-gray-400 hover:text-white border border-white/5"><Settings2 size={16} /></button>
-                                        <button onClick={() => handleDelete(loc.$id)} className="p-3 bg-primary/5 hover:bg-primary/20 rounded-xl transition text-primary/40 hover:text-primary border border-primary/10"><Trash2 size={16} /></button>
+                                        <button onClick={() => openEditModal(loc)} className="p-2.5 bg-white/5 hover:bg-white/10 rounded-xl transition text-gray-400 hover:text-white border border-white/5"><Settings2 size={14} /></button>
+                                        <button onClick={() => handleDelete(loc.$id)} className="p-2.5 bg-primary/5 hover:bg-primary/20 rounded-xl transition text-primary/40 hover:text-primary border border-primary/10"><Trash2 size={14} /></button>
                                     </div>
                                 </div>
+
                                 <h3 className="text-2xl font-black text-white mb-1 italic tracking-tighter uppercase group-hover:text-primary transition">{loc.name}</h3>
-                                <div className="flex items-center gap-2 text-gray-500 text-xs mb-2">
-                                    <MapPin size={13} className="text-secondary shrink-0" /> {loc.address || 'Sin dirección'}
+                                <div className="flex items-center gap-2 text-gray-500 text-xs mb-1">
+                                    <MapPin size={12} className="text-secondary shrink-0" /> {loc.address || 'Sin dirección'}
                                 </div>
                                 {loc.schedule && (
                                     <div className="flex items-center gap-2 text-gray-600 text-[10px] mb-3">
-                                        <Clock size={11} className="text-accent shrink-0" /> {loc.schedule}
+                                        <Clock size={10} className="text-accent shrink-0" /> {loc.schedule}
                                     </div>
                                 )}
                                 <div className="flex flex-wrap gap-2 my-4">
-                                    {loc.has_fotoya && <span className="px-2.5 py-1 bg-primary/10 border border-primary/20 rounded-xl text-[9px] text-primary font-black flex items-center gap-1 uppercase"><Camera size={11} /> FotoYa</span>}
-                                    {loc.has_color_printing && <span className="px-2.5 py-1 bg-secondary/10 border border-secondary/20 rounded-xl text-[9px] text-secondary font-black flex items-center gap-1 uppercase"><Palette size={11} /> Color {loc.max_color_size}</span>}
-                                    {loc.max_bw_size === 'A3' && <span className="px-2.5 py-1 bg-accent/10 border border-accent/20 rounded-xl text-[9px] text-accent font-black flex items-center gap-1 uppercase"><Maximize size={11} /> B&N A3</span>}
-                                    {loc.allow_custom_prices && <span className="px-2.5 py-1 bg-success/10 border border-success/20 rounded-xl text-[9px] text-success font-black flex items-center gap-1 uppercase"><DollarSign size={11} /> Precios</span>}
+                                    {loc.has_fotoya && <span className="px-2.5 py-1 bg-primary/10 border border-primary/20 rounded-xl text-[9px] text-primary font-black flex items-center gap-1 uppercase"><Camera size={10} /> FotoYa</span>}
+                                    {loc.has_color_printing && <span className="px-2.5 py-1 bg-secondary/10 border border-secondary/20 rounded-xl text-[9px] text-secondary font-black flex items-center gap-1 uppercase"><Palette size={10} /> Color {loc.max_color_size}</span>}
+                                    {loc.max_bw_size === 'A3' && <span className="px-2.5 py-1 bg-accent/10 border border-accent/20 rounded-xl text-[9px] text-accent font-black flex items-center gap-1 uppercase"><Maximize size={10} /> B&N A3</span>}
+                                    {loc.allow_custom_prices && <span className="px-2.5 py-1 bg-success/10 border border-success/20 rounded-xl text-[9px] text-success font-black flex items-center gap-1 uppercase"><DollarSign size={10} /> Precios</span>}
                                 </div>
-                                <div className="p-4 bg-white/5 border border-white/5 rounded-2xl flex items-center gap-3">
-                                    <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-gray-800 to-black flex items-center justify-center text-xs font-black text-gray-400 border border-white/5">
-                                        {manager?.full_name?.substring(0, 2).toUpperCase() || <ShieldCheck size={16} />}
+
+                                {/* Panel encargado + conectividad */}
+                                <div className={`p-4 rounded-2xl flex items-center gap-3 border transition ${online ? 'bg-success/5 border-success/15' : 'bg-white/5 border-white/5'}`}>
+                                    {/* Avatar */}
+                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xs font-black border shrink-0 ${online ? 'bg-success/20 border-success/30 text-success' : 'bg-gradient-to-br from-gray-800 to-black border-white/5 text-gray-400'}`}>
+                                        {manager?.full_name?.substring(0, 2).toUpperCase() || <ShieldCheck size={14} />}
                                     </div>
                                     <div className="flex-1 min-w-0">
                                         <p className="text-[9px] text-gray-600 font-black uppercase tracking-widest">Encargado</p>
                                         <p className="text-xs text-white font-bold truncate">{manager?.full_name || 'Sin asignar'}</p>
                                     </div>
-                                    {loc.last_active_at && (
-                                        <div className="text-right shrink-0">
-                                            <p className="text-[9px] text-gray-600 uppercase">Latido</p>
-                                            <p className="text-xs text-success font-mono">{new Date(loc.last_active_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
-                                        </div>
-                                    )}
+                                    {/* Badge de conectividad */}
+                                    <div className="shrink-0 text-right">
+                                        {online ? (
+                                            <div className="flex flex-col items-end gap-0.5">
+                                                <span className="flex items-center gap-1 text-[9px] font-black text-success uppercase">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
+                                                    Conectado
+                                                </span>
+                                                {lastSeen && <span className="text-[8px] text-gray-600">{lastSeen}</span>}
+                                            </div>
+                                        ) : (
+                                            <div className="flex flex-col items-end gap-0.5">
+                                                <span className="flex items-center gap-1 text-[9px] font-black text-gray-500 uppercase">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-gray-600" />
+                                                    Desconectado
+                                                </span>
+                                                {lastSeen && <span className="text-[8px] text-gray-600">{lastSeen}</span>}
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
                         );
@@ -271,7 +346,6 @@ export const AdminLocations = () => {
 
                         <form onSubmit={handleSubmit} className="space-y-6">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                                {/* Nombre */}
                                 <div className="space-y-2">
                                     <label className="text-[10px] text-gray-500 font-black uppercase tracking-widest block">Nombre Comercial *</label>
                                     <input required type="text" value={formData.name}
@@ -279,7 +353,6 @@ export const AdminLocations = () => {
                                         placeholder="Ej: PuntTw Centro" style={inputStyle} />
                                 </div>
 
-                                {/* Encargado — solo rol local */}
                                 <div className="space-y-2">
                                     <label className="text-[10px] text-gray-500 font-black uppercase tracking-widest block">Encargado (rol Local)</label>
                                     <DarkSelect value={formData.manager_id} onChange={e => setFormData({ ...formData, manager_id: e.target.value })}>
@@ -290,8 +363,6 @@ export const AdminLocations = () => {
                                             </option>
                                         ))}
                                     </DarkSelect>
-
-                                    {/* Info + botón para ver clientes promovibles */}
                                     <div className="flex items-center justify-between mt-2">
                                         <p className="text-[10px] text-gray-600">
                                             {availableLocals.length === 0
@@ -305,8 +376,6 @@ export const AdminLocations = () => {
                                             </button>
                                         )}
                                     </div>
-
-                                    {/* Panel de promoción de clientes */}
                                     {showPromotePanel && (
                                         <div className="mt-2 rounded-2xl border border-white/10 overflow-hidden" style={{ backgroundColor: '#111' }}>
                                             <div className="px-4 py-2 border-b border-white/10">
@@ -330,7 +399,6 @@ export const AdminLocations = () => {
                                     )}
                                 </div>
 
-                                {/* Dirección */}
                                 <div className="md:col-span-2 space-y-2">
                                     <label className="text-[10px] text-gray-500 font-black uppercase tracking-widest block">Dirección Física *</label>
                                     <div className="relative">
@@ -342,7 +410,6 @@ export const AdminLocations = () => {
                                     </div>
                                 </div>
 
-                                {/* Horario */}
                                 <div className="md:col-span-2 space-y-2">
                                     <label className="text-[10px] text-gray-500 font-black uppercase tracking-widest flex items-center gap-2">
                                         <Clock size={11} className="text-accent" /> Horario de atención
@@ -353,7 +420,6 @@ export const AdminLocations = () => {
                                 </div>
                             </div>
 
-                            {/* Servicios */}
                             <div className="space-y-3">
                                 <p className="text-[10px] text-secondary font-black uppercase tracking-widest">Servicios habilitados</p>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
