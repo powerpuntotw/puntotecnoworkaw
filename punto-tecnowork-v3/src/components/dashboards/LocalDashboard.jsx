@@ -20,7 +20,7 @@ export const LocalDashboard = ({ locationId }) => {
             try {
                 const result = await databases.updateDocument(
                     import.meta.env.VITE_APPWRITE_DATABASE_ID, 'printing_locations', locationId,
-                    { last_active_at: new Date().toISOString() }
+                    { last_active_at: Math.floor(Date.now() / 1000) }
                 );
                 console.log('[Heartbeat] ✅ OK — last_active_at:', result.last_active_at);
             } catch (err) {

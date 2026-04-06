@@ -31,16 +31,17 @@ const DarkSelect = ({ value, onChange, children }) => (
 
 // Una sucursal es "online" si su last_active_at fue hace menos de 300 segundos (5 min)
 // El heartbeat del local dispara cada 60s, así hay un margen 5x
+// last_active_at es un Unix timestamp en segundos (integer en Appwrite)
 const isOnline = (lastActiveAt) => {
     if (!lastActiveAt) return false;
-    const diff = (Date.now() - new Date(lastActiveAt).getTime()) / 1000;
-    return diff < 300;
+    const nowSec = Math.floor(Date.now() / 1000);
+    return (nowSec - lastActiveAt) < 300;
 };
 
 // Tiempo relativo legible: "hace 2 min", "hace 5 seg", etc.
 const timeAgo = (lastActiveAt) => {
     if (!lastActiveAt) return null;
-    const diff = Math.floor((Date.now() - new Date(lastActiveAt).getTime()) / 1000);
+    const diff = Math.floor(Date.now() / 1000) - lastActiveAt;
     if (diff < 60) return `hace ${diff}s`;
     if (diff < 3600) return `hace ${Math.floor(diff / 60)}min`;
     return `hace ${Math.floor(diff / 3600)}h`;
