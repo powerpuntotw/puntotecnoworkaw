@@ -307,20 +307,14 @@ export const AdminLocations = () => {
                                             {/* Badge de conectividad */}
                                             <div className="shrink-0 text-right">
                                                 {online ? (
-                                                    <div className="flex flex-col items-end">
-                                                        <span className="flex items-center gap-1 text-[8px] font-black text-success uppercase">
-                                                            <span className="w-1 h-1 rounded-full bg-success animate-pulse" />
-                                                            Conectado
-                                                        </span>
-                                                        {lastSeen && <span className="text-[8px] text-gray-600">{lastSeen}</span>}
+                                                    <div className="flex flex-col items-end pt-0.5">
+                                                        <Wifi size={12} className="text-success animate-pulse" />
+                                                        {lastSeen && <span className="text-[8px] text-gray-600 leading-none mt-1">{lastSeen}</span>}
                                                     </div>
                                                 ) : (
-                                                    <div className="flex flex-col items-end">
-                                                        <span className="flex items-center gap-1 text-[8px] font-black text-gray-500 uppercase">
-                                                            <span className="w-1 h-1 rounded-full bg-gray-600" />
-                                                            Desconectado
-                                                        </span>
-                                                        {lastSeen && <span className="text-[8px] text-gray-600">{lastSeen}</span>}
+                                                    <div className="flex flex-col items-end pt-0.5">
+                                                        <WifiOff size={12} className="text-gray-600" />
+                                                        {lastSeen && <span className="text-[8px] text-gray-600 leading-none mt-1">{lastSeen}</span>}
                                                     </div>
                                                 )}
                                             </div>
