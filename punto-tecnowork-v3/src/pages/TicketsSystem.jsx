@@ -38,6 +38,11 @@ export const TicketsSystem = () => {
     const [newSubject, setNewSubject] = useState('');
     const [newDescription, setNewDescription] = useState('');
     const [creating, setCreating] = useState(false);
+    
+    // Selectores destino
+    const [recipientRole, setRecipientRole] = useState('admin');
+    const [recipientId, setRecipientId] = useState('');
+    const [usersList, setUsersList] = useState([]);
 
     // Modal de cierre de ticket (requiere resolución obligatoria)
     const [showCloseModal, setShowCloseModal] = useState(false);
@@ -53,12 +58,46 @@ export const TicketsSystem = () => {
         try {
             setLoading(true);
             const queries = [Query.orderDesc('$createdAt')];
-            if (!isAdmin) queries.push(Query.equal('client_id', user.$id));
+            if (!isAdmin) {
+                queries.push(Query.or([
+                    Query.equal('client_id', user.$id),
+                    Query.equal('recipient_id', user.$id)
+                ]));
+            }
             const res = await databases.listDocuments(import.meta.env.VITE_APPWRITE_DATABASE_ID, 'tickets', queries);
             setTickets(res.documents);
         } catch (err) { console.error(err); }
         finally { setLoading(false); }
     };
+
+    // Load users for recipient selector when modal is open and role is not admin
+    useEffect(() => {
+        if (showCreateModal && recipientRole && recipientRole !== 'admin') {
+            const fetchUsersList = async () => {
+                try {
+                    const dbId = import.meta.env.VITE_APPWRITE_DATABASE_ID;
+                    const res = await databases.listDocuments(dbId, 'users', [
+                        Query.equal('user_type', recipientRole),
+                        Query.limit(100)
+                    ]);
+                    setUsersList(res.documents);
+                } catch(e) { console.error(e); }
+            };
+            fetchUsersList();
+        } else {
+            setUsersList([]);
+        }
+    }, [showCreateModal, recipientRole]);
+
+    // Pre-set recipient role based on user type when modal opens
+    useEffect(() => {
+        if (showCreateModal) {
+            if (isAdmin) setRecipientRole('local');
+            else if (dbUser?.user_type === 'local') setRecipientRole('client');
+            else setRecipientRole('local');
+            setRecipientId('');
+        }
+    }, [showCreateModal, isAdmin, dbUser]);
 
     useEffect(() => {
         fetchTickets();
@@ -127,6 +166,15 @@ export const TicketsSystem = () => {
     // Crear ticket con modal propio (no prompt nativo)
     const handleCreateTicket = async () => {
         if (!newSubject.trim()) return;
+        if (recipientRole !== 'admin' && !recipientId) {
+            toast.error('Debés seleccionar un destinatario.');
+            return;
+        }
+
+        const recipientUser = usersList.find(u => u.$id === recipientId);
+        const rName = recipientRole === 'admin' ? 'Administración' : (recipientUser?.full_name || 'Usuario');
+        const cRole = dbUser?.user_type || 'client';
+
         try {
             setCreating(true);
             const dbId = import.meta.env.VITE_APPWRITE_DATABASE_ID;
@@ -134,7 +182,11 @@ export const TicketsSystem = () => {
                 client_id: user.$id,
                 client_name: dbUser?.full_name || user.name,
                 subject: newSubject.trim(),
-                status: 'open'
+                status: 'open',
+                creator_role: cRole,
+                recipient_role: recipientRole,
+                recipient_id: recipientRole === 'admin' ? 'global' : recipientId,
+                recipient_name: rName
             });
             // Si hay descripción, enviarla como primer mensaje
             if (newDescription.trim()) {
@@ -214,16 +266,13 @@ export const TicketsSystem = () => {
                             <p className="text-[9px] text-gray-500 font-black uppercase tracking-widest mt-0.5">Centro de Ayuda</p>
                         </div>
                     </div>
-                    {/* Botón prominente de nuevo ticket para clientes */}
-                    {!isAdmin && (
-                        <button onClick={() => setShowCreateModal(true)}
-                            className="w-full flex items-center justify-center gap-2 bg-primary hover:bg-primary-glow text-white py-3 px-4 rounded-2xl font-black transition shadow-glow text-sm uppercase tracking-wider">
-                            <Plus size={18} /> Abrir Nuevo Ticket
-                        </button>
-                    )}
+                    <button onClick={() => setShowCreateModal(true)}
+                        className="w-full flex items-center justify-center gap-2 bg-primary hover:bg-primary-glow text-white py-3 px-4 rounded-2xl font-black transition shadow-glow text-sm uppercase tracking-wider mb-4">
+                        <Plus size={18} /> Abrir Nuevo Ticket
+                    </button>
                     {/* Para admin: botón de gestión */}
                     {isAdmin && (
-                        <div className="flex items-center justify-between">
+                        <div className="flex items-center justify-between border-t border-white/5 pt-4">
                             <span className="text-[10px] text-gray-500 uppercase tracking-widest">
                                 {unansweredCount > 0 ? `${unansweredCount} sin responder` : 'Todo respondido'}
                             </span>
@@ -247,7 +296,11 @@ export const TicketsSystem = () => {
                             <div className="flex-1 min-w-0">
                                 <h4 className="text-sm font-black text-white truncate italic uppercase tracking-tight">{t.subject}</h4>
                                 <div className="flex items-center justify-between mt-1">
-                                    <p className="text-[9px] text-gray-500 font-bold uppercase truncate">{t.client_name}</p>
+                                    <p className="text-[9px] text-gray-500 font-bold uppercase truncate">
+                                        {t.recipient_name 
+                                            ? `De: ${t.client_name} → Para: ${t.recipient_name}` 
+                                            : t.client_name}
+                                    </p>
                                     <span className={`text-[8px] font-black px-1.5 py-0.5 rounded border ${statusStyle(t.status)}`}>{statusLabel(t.status)}</span>
                                 </div>
                             </div>
@@ -340,12 +393,10 @@ export const TicketsSystem = () => {
                         <p className="text-gray-500 max-w-xs mt-4 text-sm">
                             {isAdmin ? 'Seleccioná un ticket del panel para responder.' : 'Abrí un ticket y nuestro equipo te responderá a la brevedad.'}
                         </p>
-                        {!isAdmin && (
-                            <button onClick={() => setShowCreateModal(true)}
-                                className="mt-8 flex items-center gap-2 bg-primary hover:bg-primary-glow text-white px-8 py-4 rounded-2xl font-black shadow-glow transition text-lg">
-                                <Plus size={22} /> Abrir Ticket de Soporte
-                            </button>
-                        )}
+                        <button onClick={() => setShowCreateModal(true)}
+                            className="mt-8 flex items-center gap-2 bg-primary hover:bg-primary-glow text-white px-8 py-4 rounded-2xl font-black shadow-glow transition text-lg">
+                            <Plus size={22} /> Abrir Ticket de Soporte
+                        </button>
                         <div className="mt-6 flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-primary bg-primary/5 px-6 py-3 rounded-full border border-primary/10">
                             <AlertCircle size={14} /> Soporte Realtime Activo
                         </div>
@@ -369,6 +420,54 @@ export const TicketsSystem = () => {
                             </button>
                         </div>
                         <div className="space-y-4">
+                            {/* Role Selector */}
+                            <div className="flex gap-4">
+                                {isAdmin && (
+                                    <div className="flex-1">
+                                        <label className="text-[10px] text-gray-500 font-black uppercase tracking-widest block mb-2">Destino *</label>
+                                        <select value={recipientRole} onChange={e => { setRecipientRole(e.target.value); setRecipientId(''); }}
+                                            style={{ backgroundColor: '#1a1a1a', color: '#fff', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '16px', padding: '14px 18px', width: '100%', fontSize: '14px', fontWeight: '700', outline: 'none', boxSizing: 'border-box' }} >
+                                            <option value="local">Local / Sucursal</option>
+                                        </select>
+                                    </div>
+                                )}
+                                {dbUser?.user_type === 'local' && (
+                                    <div className="flex-1">
+                                        <label className="text-[10px] text-gray-500 font-black uppercase tracking-widest block mb-2">Destino *</label>
+                                        <select value={recipientRole} onChange={e => { setRecipientRole(e.target.value); setRecipientId(''); }}
+                                            style={{ backgroundColor: '#1a1a1a', color: '#fff', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '16px', padding: '14px 18px', width: '100%', fontSize: '14px', fontWeight: '700', outline: 'none', boxSizing: 'border-box' }}>
+                                            <option value="client">Cliente</option>
+                                            <option value="admin">Administración Central</option>
+                                        </select>
+                                    </div>
+                                )}
+                                {(!dbUser?.user_type || dbUser?.user_type === 'client') && (
+                                    <div className="flex-1">
+                                        <label className="text-[10px] text-gray-500 font-black uppercase tracking-widest block mb-2">Destino *</label>
+                                        <select value={recipientRole} onChange={e => { setRecipientRole(e.target.value); setRecipientId(''); }}
+                                            style={{ backgroundColor: '#1a1a1a', color: '#fff', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '16px', padding: '14px 18px', width: '100%', fontSize: '14px', fontWeight: '700', outline: 'none', boxSizing: 'border-box' }}>
+                                            <option value="local">Local / Sucursal</option>
+                                        </select>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* User Selector if not Global Admin */}
+                            {recipientRole !== 'admin' && (
+                                <div>
+                                    <label className="text-[10px] text-gray-500 font-black uppercase tracking-widest block mb-2">
+                                        Seleccionar {recipientRole === 'local' ? 'Local' : 'Cliente'} *
+                                    </label>
+                                    <select value={recipientId} onChange={e => setRecipientId(e.target.value)}
+                                        style={{ backgroundColor: '#1a1a1a', color: '#fff', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '16px', padding: '14px 18px', width: '100%', fontSize: '14px', fontWeight: '700', outline: 'none', boxSizing: 'border-box' }}>
+                                        <option value="">-- Seleccionar destinatario --</option>
+                                        {usersList.map(u => (
+                                            <option key={u.$id} value={u.$id}>{u.full_name || u.email}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
+
                             <div>
                                 <label className="text-[10px] text-gray-500 font-black uppercase tracking-widest block mb-2">Asunto *</label>
                                 <input type="text" value={newSubject} onChange={e => setNewSubject(e.target.value)}
