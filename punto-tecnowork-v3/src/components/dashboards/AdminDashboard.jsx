@@ -2,14 +2,30 @@ import { useState, useEffect } from 'react';
 import { databases } from '../../lib/appwrite';
 import { Query } from 'appwrite';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { Users, Package, MapPin, TrendingUp, DollarSign, Activity, Gift, History, ArrowRight } from 'lucide-react';
+import { Users, Package, MapPin, TrendingUp, DollarSign, Activity, Gift, History, ArrowRight, Wifi, WifiOff } from 'lucide-react';
 import { Link } from 'react-router';
+
+// Misma lógica que AdminLocations: online si last_active_at fue hace < 180s
+const isOnline = (lastActiveAt) => {
+    if (!lastActiveAt) return false;
+    return (Date.now() - new Date(lastActiveAt).getTime()) / 1000 < 180;
+};
+
+const timeAgo = (lastActiveAt) => {
+    if (!lastActiveAt) return 'sin conexión';
+    const diff = Math.floor((Date.now() - new Date(lastActiveAt).getTime()) / 1000);
+    if (diff < 60) return `hace ${diff}s`;
+    if (diff < 3600) return `hace ${Math.floor(diff / 60)}min`;
+    return `hace ${Math.floor(diff / 3600)}h`;
+};
 
 export const AdminDashboard = () => {
     const [loading, setLoading] = useState(true);
-    const [stats, setStats] = useState({ totalUsers: 0, totalOrders: 0, totalRevenue: 0, activeLocals: 0 });
+    const [stats, setStats] = useState({ totalUsers: 0, totalOrders: 0, totalRevenue: 0, onlineLocals: 0 });
     const [chartData, setChartData] = useState([]);
     const [locals, setLocals] = useState([]);
+    // Tick cada 30s para recalcular online/offline sin refetch completo
+    const [, setTick] = useState(0);
 
     const fetchDashboardData = async () => {
         try {
@@ -21,21 +37,20 @@ export const AdminDashboard = () => {
                 databases.listDocuments(dbId, 'printing_locations', [Query.limit(100)])
             ]);
             const orders = ordersRes.documents;
+            const locs = localsRes.documents;
 
-            // Solo las entregadas cuentan como facturación real
             const revenue = orders
                 .filter(o => o.status === 'entregado')
                 .reduce((sum, o) => sum + (o.total_price || 0), 0);
 
+            setLocals(locs);
             setStats({
                 totalUsers: usersRes.total,
                 totalOrders: ordersRes.total,
                 totalRevenue: revenue,
-                activeLocals: localsRes.documents.filter(l => l.status === 'activo').length,
+                onlineLocals: locs.filter(l => isOnline(l.last_active_at)).length,
             });
-            setLocals(localsRes.documents);
 
-            // Gráfico: todas las órdenes (volumen de trabajo)
             const daily = {};
             orders.slice(-50).forEach(o => {
                 const date = new Date(o.$createdAt).toLocaleDateString([], { weekday: 'short' });
@@ -51,11 +66,30 @@ export const AdminDashboard = () => {
 
     useEffect(() => { fetchDashboardData(); }, []);
 
+    // Refrescar last_active_at cada 30s para mantener el estado de conexión actualizado
+    useEffect(() => {
+        const interval = setInterval(async () => {
+            try {
+                const res = await databases.listDocuments(
+                    import.meta.env.VITE_APPWRITE_DATABASE_ID,
+                    'printing_locations', [Query.limit(100)]
+                );
+                setLocals(res.documents);
+                setStats(prev => ({
+                    ...prev,
+                    onlineLocals: res.documents.filter(l => isOnline(l.last_active_at)).length
+                }));
+                setTick(t => t + 1);
+            } catch { }
+        }, 30000);
+        return () => clearInterval(interval);
+    }, []);
+
     const KPI_CARDS = [
         { label: 'Usuarios Totales',      value: stats.totalUsers,                          icon: Users,      color: 'text-secondary',  link: '/admin/users' },
         { label: 'Órdenes Globales',      value: stats.totalOrders,                         icon: Package,    color: 'text-primary',    link: '/admin/orders' },
         { label: 'Facturado (entregado)', value: `$${stats.totalRevenue.toLocaleString()}`, icon: DollarSign, color: 'text-success',    link: '/admin/reports' },
-        { label: 'Sucursales Online',     value: stats.activeLocals,                        icon: MapPin,     color: 'text-yellow-400', link: '/admin/locations' }
+        { label: 'Locales Conectados',    value: `${stats.onlineLocals}/${locals.length}`,  icon: Wifi,       color: 'text-secondary',  link: '/admin/locations' }
     ];
 
     return (
@@ -121,30 +155,51 @@ export const AdminDashboard = () => {
                     </div>
                 </div>
 
+                {/* Panel de sucursales con estado de conexión real */}
                 <div className="bg-card/40 backdrop-blur-3xl border border-white/10 rounded-[2.5rem] p-8 shadow-2xl flex flex-col">
-                    <h3 className="text-lg font-black text-white italic uppercase tracking-tighter mb-6 flex items-center gap-3">
+                    <h3 className="text-lg font-black text-white italic uppercase tracking-tighter mb-2 flex items-center gap-3">
                         <MapPin className="text-secondary" /> Sucursales
                     </h3>
+                    {/* Resumen de conexión */}
+                    {locals.length > 0 && (
+                        <p className="text-[10px] text-gray-500 mb-5 flex items-center gap-1.5">
+                            <span className={`w-1.5 h-1.5 rounded-full ${stats.onlineLocals > 0 ? 'bg-success animate-pulse' : 'bg-gray-600'}`} />
+                            {stats.onlineLocals > 0
+                                ? `${stats.onlineLocals} de ${locals.length} conectado(s) ahora`
+                                : 'Ningún local conectado ahora'}
+                        </p>
+                    )}
                     <div className="space-y-3 flex-1 overflow-y-auto custom-scrollbar">
                         {locals.length === 0 ? (
                             <div className="text-center py-8 text-gray-600 text-sm">Sin sucursales creadas</div>
-                        ) : locals.map(local => (
-                            <div key={local.$id} className="flex items-center justify-between p-4 bg-white/5 border border-white/5 rounded-2xl hover:border-primary/20 transition">
-                                <div className="flex items-center gap-3">
-                                    <div className={`w-2.5 h-2.5 rounded-full ${local.status === 'activo' ? 'bg-success shadow-[0_0_8px_rgba(164,204,57,0.5)]' : 'bg-gray-600'}`}></div>
-                                    <div>
-                                        <p className="text-sm font-black text-white italic uppercase tracking-tight truncate max-w-[110px]">{local.name}</p>
-                                        <p className="text-[9px] text-gray-500 font-bold uppercase">{local.status === 'activo' ? 'Activo' : 'Inactivo'}</p>
+                        ) : locals.map(local => {
+                            const online = isOnline(local.last_active_at);
+                            const lastSeen = timeAgo(local.last_active_at);
+                            return (
+                                <div key={local.$id} className={`flex items-center justify-between p-4 rounded-2xl border transition ${online ? 'bg-success/5 border-success/15' : 'bg-white/5 border-white/5'}`}>
+                                    <div className="flex items-center gap-3 min-w-0">
+                                        {/* Indicador de conexión — basado en heartbeat real */}
+                                        {online
+                                            ? <Wifi size={14} className="text-success shrink-0" />
+                                            : <WifiOff size={14} className="text-gray-600 shrink-0" />
+                                        }
+                                        <div className="min-w-0">
+                                            <p className="text-sm font-black text-white italic uppercase tracking-tight truncate max-w-[100px]">{local.name}</p>
+                                            <p className={`text-[9px] font-bold uppercase ${online ? 'text-success' : 'text-gray-600'}`}>
+                                                {online ? 'Conectado' : lastSeen}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    {/* Badge apertura */}
+                                    <div className={`text-[9px] font-black px-2 py-0.5 rounded-full shrink-0 ${local.is_open ? 'text-success bg-success/10' : 'text-gray-500 bg-white/5'}`}>
+                                        {local.is_open ? 'Abierto' : 'Cerrado'}
                                     </div>
                                 </div>
-                                <div className={`text-[9px] font-black px-2 py-0.5 rounded-full ${local.is_open ? 'text-success bg-success/10' : 'text-gray-500 bg-white/5'}`}>
-                                    {local.is_open ? 'Abierto' : 'Cerrado'}
-                                </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                     <Link to="/admin/locations" className="mt-6 py-3.5 bg-white/5 border border-white/5 rounded-2xl text-center text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] hover:bg-white/10 hover:text-white transition group">
-                        Gestionar Locales <ArrowRight size={12} className="inline ml-1 group-hover:translate-x-1 transition" />
+                        Ver detalles <ArrowRight size={12} className="inline ml-1 group-hover:translate-x-1 transition" />
                     </Link>
                 </div>
             </div>
