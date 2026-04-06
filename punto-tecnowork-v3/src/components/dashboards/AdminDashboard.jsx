@@ -21,8 +21,12 @@ export const AdminDashboard = () => {
                 databases.listDocuments(dbId, 'printing_locations', [Query.limit(100)])
             ]);
             const orders = ordersRes.documents;
-            // FIX: total_price (era total_amount que no existe)
-            const revenue = orders.reduce((sum, o) => sum + (o.total_price || 0), 0);
+
+            // Solo las entregadas cuentan como facturación real
+            const revenue = orders
+                .filter(o => o.status === 'entregado')
+                .reduce((sum, o) => sum + (o.total_price || 0), 0);
+
             setStats({
                 totalUsers: usersRes.total,
                 totalOrders: ordersRes.total,
@@ -30,6 +34,8 @@ export const AdminDashboard = () => {
                 activeLocals: localsRes.documents.filter(l => l.status === 'activo').length,
             });
             setLocals(localsRes.documents);
+
+            // Gráfico: todas las órdenes (volumen de trabajo)
             const daily = {};
             orders.slice(-50).forEach(o => {
                 const date = new Date(o.$createdAt).toLocaleDateString([], { weekday: 'short' });
@@ -46,10 +52,10 @@ export const AdminDashboard = () => {
     useEffect(() => { fetchDashboardData(); }, []);
 
     const KPI_CARDS = [
-        { label: 'Usuarios Totales',  value: stats.totalUsers,                            icon: Users,     color: 'text-secondary', link: '/admin/users' },
-        { label: 'Órdenes Globales',  value: stats.totalOrders,                           icon: Package,   color: 'text-primary',   link: '/admin/orders' },
-        { label: 'Facturación Total', value: `$${stats.totalRevenue.toLocaleString()}`,   icon: DollarSign, color: 'text-success',  link: '/admin/reports' },
-        { label: 'Sucursales Online', value: stats.activeLocals,                          icon: MapPin,    color: 'text-yellow-400', link: '/admin/locations' }
+        { label: 'Usuarios Totales',      value: stats.totalUsers,                          icon: Users,      color: 'text-secondary',  link: '/admin/users' },
+        { label: 'Órdenes Globales',      value: stats.totalOrders,                         icon: Package,    color: 'text-primary',    link: '/admin/orders' },
+        { label: 'Facturado (entregado)', value: `$${stats.totalRevenue.toLocaleString()}`, icon: DollarSign, color: 'text-success',    link: '/admin/reports' },
+        { label: 'Sucursales Online',     value: stats.activeLocals,                        icon: MapPin,     color: 'text-yellow-400', link: '/admin/locations' }
     ];
 
     return (
