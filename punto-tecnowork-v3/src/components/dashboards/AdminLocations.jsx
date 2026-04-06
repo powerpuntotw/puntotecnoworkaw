@@ -277,13 +277,15 @@ export const AdminLocations = () => {
                                     </div>
                                 </div>
 
-                                <h3 className="text-2xl font-black text-white mb-1 italic tracking-tighter uppercase group-hover:text-primary transition">{loc.name}</h3>
-                                <div className="flex items-center gap-2 text-gray-500 text-xs mb-1">
-                                    <MapPin size={12} className="text-secondary shrink-0" /> {loc.address || 'Sin dirección'}
+                                <h3 className="text-2xl font-black text-white mb-2 italic tracking-tighter uppercase group-hover:text-primary transition break-words line-clamp-2">{loc.name}</h3>
+                                <div className="flex items-start gap-2 text-gray-500 text-xs mb-2">
+                                    <MapPin size={14} className="text-secondary shrink-0 mt-0.5" /> 
+                                    <span className="leading-snug break-words">{loc.address || 'Sin dirección'}</span>
                                 </div>
                                 {loc.schedule && (
-                                    <div className="flex items-center gap-2 text-gray-600 text-[10px] mb-3">
-                                        <Clock size={10} className="text-accent shrink-0" /> {loc.schedule}
+                                    <div className="flex items-start gap-2 text-gray-600 text-[10px] mb-3">
+                                        <Clock size={12} className="text-accent shrink-0 mt-0.5" /> 
+                                        <span className="leading-snug break-words">{loc.schedule}</span>
                                     </div>
                                 )}
                                 <div className="flex flex-wrap gap-2 my-4">
@@ -301,7 +303,7 @@ export const AdminLocations = () => {
                                     </div>
                                     <div className="flex-1 min-w-0">
                                         <p className="text-[9px] text-gray-600 font-black uppercase tracking-widest">Encargado</p>
-                                        <p className="text-xs text-white font-bold truncate">{manager?.full_name || 'Sin asignar'}</p>
+                                        <p className="text-xs text-white font-bold break-words leading-tight mt-0.5">{manager?.full_name || 'Sin asignar'}</p>
                                     </div>
                                     {/* Badge de conectividad */}
                                     <div className="shrink-0 text-right">
