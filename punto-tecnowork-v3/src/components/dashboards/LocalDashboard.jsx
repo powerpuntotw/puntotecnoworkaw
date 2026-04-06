@@ -16,16 +16,12 @@ export const LocalDashboard = ({ locationId }) => {
     useEffect(() => {
         if (!locationId) return;
         const sendHeartbeat = async () => {
-            console.log('[Heartbeat] sending for locationId:', locationId);
             try {
-                const result = await databases.updateDocument(
+                await databases.updateDocument(
                     import.meta.env.VITE_APPWRITE_DATABASE_ID, 'printing_locations', locationId,
                     { last_active_at: Math.floor(Date.now() / 1000) }
                 );
-                console.log('[Heartbeat] ✅ OK — last_active_at:', result.last_active_at);
-            } catch (err) {
-                console.error('[Heartbeat] ❌ ERROR:', err.message, err);
-            }
+            } catch { }
         };
         const handleVisibility = () => {
             if (document.hidden) clearInterval(heartbeatRef.current);
