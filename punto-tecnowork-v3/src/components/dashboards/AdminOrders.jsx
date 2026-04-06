@@ -38,13 +38,22 @@ export const AdminOrders = () => {
         cancelado:  'text-red-400 bg-red-400/10 border-red-400/20'
     }[s] || 'text-gray-500 bg-gray-500/10 border-gray-500/20');
 
-    const totalRevenue = filtered.reduce((s, o) => s + (o.total_price || 0), 0);
+    // Solo contar órdenes efectivamente entregadas
+    const totalRevenue = filtered
+        .filter(o => o.status === 'entregado')
+        .reduce((s, o) => s + (o.total_price || 0), 0);
+
+    const deliveredCount = filtered.filter(o => o.status === 'entregado').length;
 
     return (
         <div className="space-y-6 pb-10">
             <div>
                 <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-hero bg-clip-text text-transparent">Gestión de Órdenes</h1>
-                <p className="text-gray-400 mt-1">Vista global · {orders.length} órdenes · facturación ${totalRevenue.toLocaleString()}</p>
+                <p className="text-gray-400 mt-1">
+                    {orders.length} órdenes totales ·{' '}
+                    <span className="text-success font-semibold">${totalRevenue.toLocaleString()} facturado</span>
+                    <span className="text-gray-600 text-xs ml-1">({deliveredCount} entregadas)</span>
+                </p>
             </div>
             <div className="bg-card/50 border border-white/10 rounded-2xl p-4 flex flex-col sm:flex-row gap-3">
                 <div className="relative flex-1">
@@ -87,7 +96,10 @@ export const AdminOrders = () => {
                                     <p className="text-sm text-white">{o.client_name || 'Sin nombre'}</p>
                                     <div className="flex items-center justify-between text-xs text-gray-500">
                                         <span className="flex items-center gap-1"><MapPin size={10} />{o.location_name || 'Sin local'}</span>
-                                        <span className="font-mono text-gray-300 font-semibold">${(o.total_price || 0).toLocaleString()}</span>
+                                        <span className={`font-mono font-semibold ${o.status === 'entregado' ? 'text-success' : 'text-gray-500'}`}>
+                                            ${(o.total_price || 0).toLocaleString()}
+                                            {o.status !== 'entregado' && <span className="text-[9px] ml-1 text-gray-600">pendiente</span>}
+                                        </span>
                                     </div>
                                 </div>
                             ))}
@@ -112,7 +124,14 @@ export const AdminOrders = () => {
                                             <td className="py-3 px-5 text-white text-sm">{o.client_name || <span className="text-gray-600 italic">sin nombre</span>}</td>
                                             <td className="py-3 px-5 text-gray-400 text-sm hidden md:table-cell">{o.location_name || <span className="text-gray-600 italic">sin local</span>}</td>
                                             <td className="py-3 px-5"><span className={`px-2.5 py-1 rounded-full text-xs font-bold border ${statusStyle(o.status)}`}>{o.status?.toUpperCase() || 'N/A'}</span></td>
-                                            <td className="py-3 px-5 font-mono text-gray-300 font-semibold">${(o.total_price || 0).toLocaleString()}</td>
+                                            <td className="py-3 px-5">
+                                                <span className={`font-mono font-semibold text-sm ${o.status === 'entregado' ? 'text-success' : 'text-gray-500'}`}>
+                                                    ${(o.total_price || 0).toLocaleString()}
+                                                </span>
+                                                {o.status !== 'entregado' && (
+                                                    <span className="text-[9px] text-gray-600 font-bold uppercase ml-1">pend.</span>
+                                                )}
+                                            </td>
                                             <td className="py-3 px-5 text-gray-500 text-xs hidden lg:table-cell">{new Date(o.$createdAt).toLocaleDateString()}</td>
                                         </tr>
                                     ))}
