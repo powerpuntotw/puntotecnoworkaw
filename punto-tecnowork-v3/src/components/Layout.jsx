@@ -1,16 +1,107 @@
-import { Outlet, NavLink, useNavigate } from 'react-router';
-import { Home, FileText, Gift, LogOut, Ticket, Users, MapPin, BarChart3, Settings, MessageSquare, Palette, History, UserCircle, DollarSign, AlertTriangle, Sun, Moon, Menu, X } from 'lucide-react';
-import { useState } from 'react';
+import { Outlet, NavLink, useNavigate, useLocation } from 'react-router';
+import { Home, FileText, Gift, LogOut, Ticket, Users, MapPin, BarChart3, Settings, MessageSquare, Palette, History, UserCircle, DollarSign, AlertTriangle, Sun, Moon, Menu, X, Bell } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useBranding } from '../context/BrandingContext';
 import { useTheme } from '../context/ThemeContext';
+import { databases, client } from '../lib/appwrite';
+import { Query } from 'appwrite';
+import { Link } from 'react-router';
+
+// Sonido de alerta — Web Audio API, sin dependencias
+const playAlert = () => {
+    try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.frequency.setValueAtTime(880, ctx.currentTime);
+        osc.frequency.setValueAtTime(660, ctx.currentTime + 0.1);
+        gain.gain.setValueAtTime(0.3, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.4);
+    } catch { }
+};
 
 export const MainLayout = () => {
     const { user, dbUser, logout, isProfileComplete } = useAuth();
     const { platformName, logoMain, logoLight, logoDark, getLogoUrl } = useBranding();
     const { isDark, toggleTheme } = useTheme();
     const navigate = useNavigate();
+    const location = useLocation();
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+    // ── Alerta global de soporte ──────────────────────────────
+    const [unreadCount, setUnreadCount] = useState(0);
+    const [showSupportAlert, setShowSupportAlert] = useState(false);
+    const [latestTicketSubject, setLatestTicketSubject] = useState('');
+    const isOnTicketsPage = location.pathname === '/tickets';
+    const initialLoadDone = useRef(false);
+
+    useEffect(() => {
+        if (!dbUser) return;
+        const dbId = import.meta.env.VITE_APPWRITE_DATABASE_ID;
+        const isAdmin = dbUser.user_type === 'admin';
+
+        // Cargar cantidad inicial de tickets abiertos
+        const loadInitial = async () => {
+            try {
+                const queries = [Query.equal('status', 'open'), Query.orderDesc('$createdAt'), Query.limit(20)];
+                if (!isAdmin) queries.push(Query.equal('client_id', user.$id));
+                const res = await databases.listDocuments(dbId, 'tickets', queries);
+                setUnreadCount(res.documents.length);
+                if (res.documents.length > 0) setLatestTicketSubject(res.documents[0].subject);
+                initialLoadDone.current = true;
+            } catch { }
+        };
+        loadInitial();
+
+        // Realtime: escuchar nuevos tickets y mensajes
+        const unsubTickets = client.subscribe(
+            `databases.${dbId}.collections.tickets.documents`,
+            response => {
+                if (!initialLoadDone.current) return;
+                if (response.events.some(e => e.includes('.create'))) {
+                    const t = response.payload;
+                    // Admin ve todos; cliente solo los suyos
+                    if (!isAdmin && t.client_id !== user.$id) return;
+                    setUnreadCount(prev => prev + 1);
+                    setLatestTicketSubject(t.subject);
+                    if (!isOnTicketsPage) {
+                        setShowSupportAlert(true);
+                        playAlert();
+                    }
+                }
+            }
+        );
+
+        const unsubMessages = client.subscribe(
+            `databases.${dbId}.collections.messages.documents`,
+            response => {
+                if (!initialLoadDone.current) return;
+                if (!response.events.some(e => e.includes('.create'))) return;
+                const msg = response.payload;
+                // No alertar por mensajes propios
+                if (msg.sender_id === user.$id) return;
+                if (!isOnTicketsPage) {
+                    setShowSupportAlert(true);
+                    setLatestTicketSubject(prev => prev || 'Nuevo mensaje de soporte');
+                    playAlert();
+                }
+            }
+        );
+
+        return () => { unsubTickets(); unsubMessages(); };
+    }, [dbUser?.user_type, isOnTicketsPage]);
+
+    // Ocultar alerta al entrar a /tickets
+    useEffect(() => {
+        if (isOnTicketsPage) {
+            setShowSupportAlert(false);
+        }
+    }, [isOnTicketsPage]);
 
     const role = dbUser?.user_type || 'client';
     const profileComplete = isProfileComplete();
@@ -41,7 +132,21 @@ export const MainLayout = () => {
             links.push({ to: '/admin/audit', icon: <History size={20} />, label: 'Auditoría' });
         }
         links.push({ to: '/profile', icon: <UserCircle size={20} />, label: 'Perfil' });
-        links.push({ to: '/tickets', icon: <MessageSquare size={20} />, label: 'Soporte' });
+        // Soporte con badge de no leídos
+        links.push({
+            to: '/tickets',
+            icon: (
+                <span className="relative inline-flex">
+                    <MessageSquare size={20} />
+                    {unreadCount > 0 && !isOnTicketsPage && (
+                        <span className="absolute -top-1 -right-1 w-4 h-4 bg-primary text-white text-[9px] font-black rounded-full flex items-center justify-center animate-pulse">
+                            {unreadCount > 9 ? '9+' : unreadCount}
+                        </span>
+                    )}
+                </span>
+            ),
+            label: 'Soporte'
+        });
         return links;
     };
 
@@ -76,7 +181,7 @@ export const MainLayout = () => {
     return (
         <div className="flex h-screen bg-background text-foreground overflow-hidden">
 
-            {/* ====== SIDEBAR — solo visible en lg+ ====== */}
+            {/* ====== SIDEBAR ====== */}
             <aside className="hidden lg:flex w-64 border-r border-white/5 bg-card/50 backdrop-blur-md flex-col py-6 transition-all shrink-0">
                 <div className="px-8 mb-6 flex items-center shrink-0">
                     {logoUrl ? (
@@ -88,7 +193,6 @@ export const MainLayout = () => {
                     )}
                     <span className="ml-3 font-semibold text-lg tracking-wide">{displayName}</span>
                 </div>
-                {/* nav con scroll — fix para que Cerrar Sesión siempre sea visible */}
                 <nav className="flex-1 min-h-0 overflow-y-auto px-3 space-y-0.5">
                     {allLinks.map(link => <NavItem key={link.to} link={link} />)}
                 </nav>
@@ -125,6 +229,16 @@ export const MainLayout = () => {
                         <span className="font-semibold text-sm">{displayName}</span>
                     </div>
                     <div className="flex items-center gap-2 sm:gap-3 ml-auto">
+                        {/* Campana de soporte — visible en header cuando hay mensajes no leídos */}
+                        {unreadCount > 0 && !isOnTicketsPage && (
+                            <Link to="/tickets"
+                                className="relative w-9 h-9 flex items-center justify-center rounded-xl border border-primary/30 bg-primary/10 text-primary animate-pulse hover:bg-primary/20 transition">
+                                <Bell size={16} />
+                                <span className="absolute -top-1 -right-1 w-4 h-4 bg-primary text-white text-[9px] font-black rounded-full flex items-center justify-center">
+                                    {unreadCount > 9 ? '9+' : unreadCount}
+                                </span>
+                            </Link>
+                        )}
                         <button onClick={toggleTheme} title={isDark ? 'Modo claro' : 'Modo oscuro'}
                             className="w-9 h-9 flex items-center justify-center rounded-xl border border-white/10 bg-white/5 hover:bg-primary/10 hover:border-primary/30 transition text-gray-400 hover:text-primary">
                             {isDark ? <Sun size={16} /> : <Moon size={16} />}
@@ -139,6 +253,29 @@ export const MainLayout = () => {
                         </div>
                     </div>
                 </header>
+
+                {/* ── Banner alerta soporte — aparece en CUALQUIER pantalla ── */}
+                {showSupportAlert && !isOnTicketsPage && (
+                    <div className="mx-3 sm:mx-4 mt-3 flex items-center gap-3 bg-primary/10 border border-primary/30 rounded-2xl px-4 py-3 animate-in slide-in-from-top-2 duration-300">
+                        <div className="w-8 h-8 bg-primary/20 rounded-xl flex items-center justify-center shrink-0">
+                            <MessageSquare size={16} className="text-primary animate-pulse" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <p className="text-primary font-black text-sm uppercase tracking-tight">Nuevo mensaje de soporte</p>
+                            {latestTicketSubject && (
+                                <p className="text-primary/70 text-xs truncate">{latestTicketSubject}</p>
+                            )}
+                        </div>
+                        <Link to="/tickets" onClick={() => setShowSupportAlert(false)}
+                            className="shrink-0 bg-primary text-white font-black text-xs px-4 py-2 rounded-xl hover:bg-primary-glow transition whitespace-nowrap shadow-glow">
+                            Ver ahora
+                        </Link>
+                        <button onClick={() => setShowSupportAlert(false)}
+                            className="shrink-0 p-1.5 text-primary/50 hover:text-primary transition">
+                            <X size={16} />
+                        </button>
+                    </div>
+                )}
 
                 {!profileComplete && (
                     <div className="mx-3 sm:mx-4 mt-3 flex items-start sm:items-center gap-3 bg-warning/10 border border-warning/30 rounded-2xl px-4 sm:px-6 py-3 sm:py-4">
@@ -201,7 +338,7 @@ export const MainLayout = () => {
                 </div>
             )}
 
-            {/* ====== BOTTOM NAV — solo mobile ====== */}
+            {/* ====== BOTTOM NAV mobile ====== */}
             <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-background/95 backdrop-blur-md border-t border-white/10 flex items-center justify-around px-2 py-2">
                 {bottomLinks.map(link => {
                     const enabled = isLinkEnabled(link.to);
