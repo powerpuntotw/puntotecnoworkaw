@@ -465,7 +465,11 @@ export const TicketsSystem = () => {
                                         style={{ backgroundColor: '#1a1a1a', color: '#fff', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '16px', padding: '14px 18px', width: '100%', fontSize: '14px', fontWeight: '700', outline: 'none', boxSizing: 'border-box' }}>
                                         <option value="">-- Seleccionar destinatario --</option>
                                         {usersList.map(u => (
-                                            <option key={u.$id} value={u.$id}>{u.name || u.full_name || u.email}</option>
+                                            <option key={u.$id} value={u.$id}>
+                                                {recipientRole === 'local' 
+                                                    ? `${u.name || 'Local'} ${u.address ? `(${u.address})` : ''}` 
+                                                    : (u.full_name || u.email)}
+                                            </option>
                                         ))}
                                     </select>
                                 </div>
