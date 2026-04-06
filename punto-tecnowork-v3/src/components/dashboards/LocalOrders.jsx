@@ -50,16 +50,8 @@ export const LocalOrders = ({ locationId }) => {
             setIsUpdating(true);
             const dbId = import.meta.env.VITE_APPWRITE_DATABASE_ID;
 
-            // Payload base
-            const payload = { status: newStatus };
-
-            // Al iniciar producción → activar el agente de impresión
-            if (newStatus === 'en_proceso') {
-                payload.print_status = 'pending';
-            }
-
-            await databases.updateDocument(dbId, 'orders', orderId, payload);
-            setOrders(orders.map(o => o.$id === orderId ? { ...o, ...payload } : o));
+            await databases.updateDocument(dbId, 'orders', orderId, { status: newStatus });
+            setOrders(orders.map(o => o.$id === orderId ? { ...o, status: newStatus } : o));
 
             if (newStatus === 'en_proceso') {
                 toast.success('🖨 Enviando a imprimir...', {
@@ -77,7 +69,8 @@ export const LocalOrders = ({ locationId }) => {
                 });
             }
             setSelectedOrder(null);
-        } catch {
+        } catch (err) {
+            console.error('Error updating order:', err);
             toast.error("Error al actualizar la orden");
         } finally {
             setIsUpdating(false);
