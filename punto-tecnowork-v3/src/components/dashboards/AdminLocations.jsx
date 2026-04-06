@@ -296,34 +296,36 @@ export const AdminLocations = () => {
                                 </div>
 
                                 {/* Panel encargado + conectividad */}
-                                <div className={`p-4 rounded-2xl flex items-center gap-3 border transition ${online ? 'bg-success/5 border-success/15' : 'bg-white/5 border-white/5'}`}>
+                                <div className={`p-4 rounded-2xl flex items-start gap-3 border transition ${online ? 'bg-success/5 border-success/15' : 'bg-white/5 border-white/5'}`}>
                                     {/* Avatar */}
                                     <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xs font-black border shrink-0 ${online ? 'bg-success/20 border-success/30 text-success' : 'bg-gradient-to-br from-gray-800 to-black border-white/5 text-gray-400'}`}>
                                         {manager?.full_name?.substring(0, 2).toUpperCase() || <ShieldCheck size={14} />}
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                        <p className="text-[9px] text-gray-600 font-black uppercase tracking-widest">Encargado</p>
-                                        <p className="text-xs text-white font-bold leading-tight mt-0.5">{manager?.full_name || 'Sin asignar'}</p>
-                                    </div>
-                                    {/* Badge de conectividad */}
-                                    <div className="shrink-0 text-right">
-                                        {online ? (
-                                            <div className="flex flex-col items-end gap-0.5">
-                                                <span className="flex items-center gap-1 text-[9px] font-black text-success uppercase">
-                                                    <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
-                                                    Conectado
-                                                </span>
-                                                {lastSeen && <span className="text-[8px] text-gray-600">{lastSeen}</span>}
+                                        <div className="flex justify-between items-start mb-1">
+                                            <p className="text-[9px] text-gray-500 font-black uppercase tracking-widest leading-tight">Encargado</p>
+                                            {/* Badge de conectividad */}
+                                            <div className="shrink-0 text-right">
+                                                {online ? (
+                                                    <div className="flex flex-col items-end">
+                                                        <span className="flex items-center gap-1 text-[8px] font-black text-success uppercase">
+                                                            <span className="w-1 h-1 rounded-full bg-success animate-pulse" />
+                                                            Conectado
+                                                        </span>
+                                                        {lastSeen && <span className="text-[8px] text-gray-600">{lastSeen}</span>}
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex flex-col items-end">
+                                                        <span className="flex items-center gap-1 text-[8px] font-black text-gray-500 uppercase">
+                                                            <span className="w-1 h-1 rounded-full bg-gray-600" />
+                                                            Desconectado
+                                                        </span>
+                                                        {lastSeen && <span className="text-[8px] text-gray-600">{lastSeen}</span>}
+                                                    </div>
+                                                )}
                                             </div>
-                                        ) : (
-                                            <div className="flex flex-col items-end gap-0.5">
-                                                <span className="flex items-center gap-1 text-[9px] font-black text-gray-500 uppercase">
-                                                    <span className="w-1.5 h-1.5 rounded-full bg-gray-600" />
-                                                    Desconectado
-                                                </span>
-                                                {lastSeen && <span className="text-[8px] text-gray-600">{lastSeen}</span>}
-                                            </div>
-                                        )}
+                                        </div>
+                                        <p className="text-xs text-white font-bold leading-tight">{manager?.full_name || 'Sin asignar'}</p>
                                     </div>
                                 </div>
                             </div>
