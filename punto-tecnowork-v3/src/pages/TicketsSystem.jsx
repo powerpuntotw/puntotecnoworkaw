@@ -59,10 +59,15 @@ export const TicketsSystem = () => {
             setLoading(true);
             const queries = [Query.orderDesc('$createdAt')];
             if (!isAdmin) {
-                queries.push(Query.or([
+                const userOrs = [
                     Query.equal('client_id', user.$id),
                     Query.equal('recipient_id', user.$id)
-                ]));
+                ];
+                if (dbUser?.user_type === 'local' && dbUser?.location_id) {
+                    userOrs.push(Query.equal('recipient_id', dbUser.location_id));
+                    userOrs.push(Query.equal('client_id', dbUser.location_id));
+                }
+                queries.push(Query.or(userOrs));
             }
             const res = await databases.listDocuments(import.meta.env.VITE_APPWRITE_DATABASE_ID, 'tickets', queries);
             setTickets(res.documents);
@@ -76,11 +81,18 @@ export const TicketsSystem = () => {
             const fetchUsersList = async () => {
                 try {
                     const dbId = import.meta.env.VITE_APPWRITE_DATABASE_ID;
-                    const res = await databases.listDocuments(dbId, 'users', [
-                        Query.equal('user_type', recipientRole),
-                        Query.limit(100)
-                    ]);
-                    setUsersList(res.documents);
+                    if (recipientRole === 'local') {
+                        const res = await databases.listDocuments(dbId, 'printing_locations', [
+                            Query.limit(100)
+                        ]);
+                        setUsersList(res.documents);
+                    } else {
+                        const res = await databases.listDocuments(dbId, 'users', [
+                            Query.equal('user_type', recipientRole),
+                            Query.limit(100)
+                        ]);
+                        setUsersList(res.documents);
+                    }
                 } catch(e) { console.error(e); }
             };
             fetchUsersList();
@@ -172,7 +184,7 @@ export const TicketsSystem = () => {
         }
 
         const recipientUser = usersList.find(u => u.$id === recipientId);
-        const rName = recipientRole === 'admin' ? 'Administración' : (recipientUser?.full_name || 'Usuario');
+        const rName = recipientRole === 'admin' ? 'Administración' : (recipientUser?.name || recipientUser?.full_name || 'Destinatario');
         const cRole = dbUser?.user_type || 'client';
 
         try {
@@ -422,15 +434,6 @@ export const TicketsSystem = () => {
                         <div className="space-y-4">
                             {/* Role Selector */}
                             <div className="flex gap-4">
-                                {isAdmin && (
-                                    <div className="flex-1">
-                                        <label className="text-[10px] text-gray-500 font-black uppercase tracking-widest block mb-2">Destino *</label>
-                                        <select value={recipientRole} onChange={e => { setRecipientRole(e.target.value); setRecipientId(''); }}
-                                            style={{ backgroundColor: '#1a1a1a', color: '#fff', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '16px', padding: '14px 18px', width: '100%', fontSize: '14px', fontWeight: '700', outline: 'none', boxSizing: 'border-box' }} >
-                                            <option value="local">Local / Sucursal</option>
-                                        </select>
-                                    </div>
-                                )}
                                 {dbUser?.user_type === 'local' && (
                                     <div className="flex-1">
                                         <label className="text-[10px] text-gray-500 font-black uppercase tracking-widest block mb-2">Destino *</label>
@@ -462,7 +465,7 @@ export const TicketsSystem = () => {
                                         style={{ backgroundColor: '#1a1a1a', color: '#fff', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '16px', padding: '14px 18px', width: '100%', fontSize: '14px', fontWeight: '700', outline: 'none', boxSizing: 'border-box' }}>
                                         <option value="">-- Seleccionar destinatario --</option>
                                         {usersList.map(u => (
-                                            <option key={u.$id} value={u.$id}>{u.full_name || u.email}</option>
+                                            <option key={u.$id} value={u.$id}>{u.name || u.full_name || u.email}</option>
                                         ))}
                                     </select>
                                 </div>
