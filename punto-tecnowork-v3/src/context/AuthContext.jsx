@@ -1,5 +1,5 @@
-import { createContext, useContext, useEffect, useState, useRef } from 'react';
-import { account, databases } from '../lib/appwrite';
+import { createContext, useContext, useEffect, useState, useRef, useCallback } from 'react';
+import { account, databases, withRetry, ConnectionMonitor } from '../lib/appwrite';
 import { OAuthProvider, Query, ID } from 'appwrite';
 import toast from 'react-hot-toast';
 
@@ -12,17 +12,25 @@ export const AuthProvider = ({ children }) => {
     const [dbUser, setDbUser] = useState(null);
     const [loading, setLoading] = useState(true);
     const isCheckingRef = useRef(false);
+    // Controla el timer de refresco proactivo de sesión (cada 45 min)
+    const sessionRefreshTimerRef = useRef(null);
 
-    const checkSession = async () => {
+    // ─── checkSession: blindada con withRetry ───────────────────────────────
+    const checkSession = useCallback(async () => {
         if (isCheckingRef.current) return;
         isCheckingRef.current = true;
         try {
-            const sessionData = await account.get();
+            const sessionData = await withRetry(() => account.get(), {
+                maxRetries: 3, baseDelayMs: 800,
+            });
 
-            const dbUserData = await databases.listDocuments(
-                import.meta.env.VITE_APPWRITE_DATABASE_ID,
-                'users',
-                [Query.equal('auth_id', sessionData.$id)]
+            const dbUserData = await withRetry(
+                () => databases.listDocuments(
+                    import.meta.env.VITE_APPWRITE_DATABASE_ID,
+                    'users',
+                    [Query.equal('auth_id', sessionData.$id)]
+                ),
+                { maxRetries: 3, baseDelayMs: 600 }
             );
 
             let currentUserDoc = null;
@@ -30,9 +38,11 @@ export const AuthProvider = ({ children }) => {
                 currentUserDoc = dbUserData.documents[0];
                 if (currentUserDoc.email === 'powerpuntotw@gmail.com' && currentUserDoc.user_type !== 'admin') {
                     try {
-                        currentUserDoc = await databases.updateDocument(
-                            import.meta.env.VITE_APPWRITE_DATABASE_ID, 'users', currentUserDoc.$id,
-                            { user_type: 'admin' }
+                        currentUserDoc = await withRetry(
+                            () => databases.updateDocument(
+                                import.meta.env.VITE_APPWRITE_DATABASE_ID, 'users', currentUserDoc.$id,
+                                { user_type: 'admin' }
+                            )
                         );
                         toast.success('¡Cuenta promovida a Administrador automáticamente!');
                     } catch {
@@ -40,31 +50,67 @@ export const AuthProvider = ({ children }) => {
                     }
                 }
             } else {
-                currentUserDoc = await databases.createDocument(
-                    import.meta.env.VITE_APPWRITE_DATABASE_ID, 'users', ID.unique(),
-                    {
-                        auth_id: sessionData.$id,
-                        full_name: sessionData.name || 'Nuevo Usuario',
-                        email: sessionData.email || '',
-                        user_type: sessionData.email === 'powerpuntotw@gmail.com' ? 'admin' : 'client'
-                    }
+                currentUserDoc = await withRetry(
+                    () => databases.createDocument(
+                        import.meta.env.VITE_APPWRITE_DATABASE_ID, 'users', ID.unique(),
+                        {
+                            auth_id: sessionData.$id,
+                            full_name: sessionData.name || 'Nuevo Usuario',
+                            email: sessionData.email || '',
+                            user_type: sessionData.email === 'powerpuntotw@gmail.com' ? 'admin' : 'client'
+                        }
+                    )
                 );
                 toast.success('¡Bienvenido! Tu perfil se ha creado exitosamente.');
             }
 
             setUser(sessionData);
             setDbUser(currentUserDoc);
+
+            // Programar refresco proactivo de sesión antes de que expire (45 min)
+            clearTimeout(sessionRefreshTimerRef.current);
+            sessionRefreshTimerRef.current = setTimeout(() => {
+                checkSession();
+            }, 45 * 60 * 1000);
+
         } catch (error) {
             setUser(null);
             setDbUser(null);
+            clearTimeout(sessionRefreshTimerRef.current);
             if (error.code !== 401) toast.error('Ocurrió un error al verificar la sesión.');
         } finally {
             setLoading(false);
             isCheckingRef.current = false;
         }
-    };
+    }, []);
 
-    useEffect(() => { checkSession(); }, []);
+    // ─── Inicio: cargar sesión ──────────────────────────────────────────────
+    useEffect(() => {
+        checkSession();
+        return () => clearTimeout(sessionRefreshTimerRef.current);
+    }, [checkSession]);
+
+    // ─── BLINDAJE: reconectar automáticamente al recuperar internet ─────────
+    useEffect(() => {
+        const unsubscribe = ConnectionMonitor.subscribe((isOnline) => {
+            if (isOnline && !isCheckingRef.current) {
+                // Pequeño delay para que el TCP se estabilice
+                setTimeout(() => checkSession(), 1500);
+            }
+        });
+        return unsubscribe;
+    }, [checkSession]);
+
+    // ─── BLINDAJE: reconectar si la ventana vuelve a estar en foco ──────────
+    useEffect(() => {
+        const handleFocus = () => {
+            if (!document.hidden && ConnectionMonitor.isOnline && !isCheckingRef.current) {
+                checkSession();
+            }
+        };
+        document.addEventListener('visibilitychange', handleFocus);
+        return () => document.removeEventListener('visibilitychange', handleFocus);
+    }, [checkSession]);
 
     const loginWithGoogle = () => {
         account.createOAuth2Session(
@@ -75,8 +121,9 @@ export const AuthProvider = ({ children }) => {
     };
 
     const logout = async () => {
+        clearTimeout(sessionRefreshTimerRef.current);
         try {
-            await account.deleteSession('current');
+            await withRetry(() => account.deleteSession('current'));
             setUser(null);
             setDbUser(null);
         } catch (error) { console.error('Error logging out:', error); }
@@ -84,8 +131,10 @@ export const AuthProvider = ({ children }) => {
 
     const updateProfile = async (data) => {
         try {
-            const updated = await databases.updateDocument(
-                import.meta.env.VITE_APPWRITE_DATABASE_ID, 'users', dbUser.$id, data
+            const updated = await withRetry(
+                () => databases.updateDocument(
+                    import.meta.env.VITE_APPWRITE_DATABASE_ID, 'users', dbUser.$id, data
+                )
             );
             setDbUser(updated);
             toast.success('Perfil actualizado correctamente');

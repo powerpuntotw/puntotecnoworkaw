@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router';
-import { User, Phone, Mail, ArrowRight, Loader2, LogOut } from 'lucide-react';
+import { User, Phone, Mail, MapPin, ArrowRight, Loader2, LogOut } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export const CompleteProfile = () => {
@@ -11,9 +11,10 @@ export const CompleteProfile = () => {
 
     const [formData, setFormData] = useState({
         full_name: dbUser?.full_name || '',
-        phone: dbUser?.phone || '',
-        email: dbUser?.email || '',
-        dni: dbUser?.dni || ''
+        phone:     dbUser?.phone    || '',
+        email:     dbUser?.email    || '',
+        dni:       dbUser?.dni      || '',
+        address:   dbUser?.address  || '',
     });
 
     // Sincronizar formData cuando dbUser cargue
@@ -21,9 +22,10 @@ export const CompleteProfile = () => {
         if (dbUser) {
             setFormData({
                 full_name: dbUser.full_name || '',
-                phone: dbUser.phone || '',
-                email: dbUser.email || '',
-                dni: dbUser.dni || ''
+                phone:     dbUser.phone    || '',
+                email:     dbUser.email    || '',
+                dni:       dbUser.dni      || '',
+                address:   dbUser.address  || '',
             });
         }
     }, [dbUser]);
@@ -46,8 +48,8 @@ export const CompleteProfile = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        if (!formData.full_name || !formData.phone || !formData.email) {
-            toast.error("Por favor completa todos los campos");
+        if (!formData.full_name || !formData.phone || !formData.email || !formData.address) {
+            toast.error('Por favor completá todos los campos obligatorios');
             return;
         }
 
@@ -125,8 +127,23 @@ export const CompleteProfile = () => {
                         </div>
                     </div>
 
-                    <button 
-                        type="submit" 
+                    <div className="space-y-2">
+                    <label className="text-[10px] text-gray-500 font-black uppercase tracking-widest ml-1">Dirección</label>
+                        <div className="relative">
+                            <MapPin className="absolute left-5 top-1/2 -translate-y-1/2 text-success" size={20} />
+                            <input
+                                required
+                                type="text"
+                                placeholder="Av. 25 de Mayo 123, Formosa"
+                                value={formData.address}
+                                onChange={e => setFormData({...formData, address: e.target.value})}
+                                className="w-full bg-white/5 border border-white/10 rounded-2xl pl-14 pr-6 py-5 text-white font-bold focus:border-success focus:ring-1 focus:ring-success outline-none transition placeholder:text-gray-700"
+                            />
+                        </div>
+                    </div>
+
+                    <button
+                        type="submit"
                         disabled={loading}
                         className="group w-full bg-primary hover:bg-primary-glow text-white py-6 rounded-3xl font-black text-xl italic tracking-tighter uppercase transition shadow-glow shadow-primary/30 flex items-center justify-center gap-3 disabled:opacity-50"
                     >

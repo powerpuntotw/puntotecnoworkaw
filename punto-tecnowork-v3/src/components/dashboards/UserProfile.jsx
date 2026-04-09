@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { avatars } from '../../lib/appwrite';
+import { TierCalculator } from '../../lib/constants';
 import { User, Mail, Phone, MapPin, CreditCard, Save, Loader2, LogOut, CheckCircle, Star, Trophy, Zap, Target, Shield, Store } from 'lucide-react';
 
 // ── Field definido FUERA del componente ────────────────────────────────────
@@ -42,14 +43,22 @@ export const UserProfile = () => {
         finally { setIsSaving(false); }
     };
 
-    const points = dbUser?.points || 0;
-    const getTier = (pts) => {
-        if (pts >= 5000) return { name: 'Diamond', icon: Trophy, color: '#0093D8', bg: 'from-[#0093D8]/20 to-[#0093D8]/5', next: null, progress: 100 };
-        if (pts >= 2000) return { name: 'Gold', icon: Star, color: '#FFC905', bg: 'from-[#FFC905]/20 to-[#FFC905]/5', next: '5,000 para Diamond', progress: (pts / 5000) * 100 };
-        if (pts >= 500) return { name: 'Silver', icon: Target, color: '#9CA3AF', bg: 'from-gray-400/20 to-gray-400/5', next: '2,000 para Gold', progress: (pts / 2000) * 100 };
-        return { name: 'Bronze', icon: Zap, color: '#EB1C24', bg: 'from-primary/20 to-primary/5', next: '500 para Silver', progress: (pts / 500) * 100 };
+    const points           = dbUser?.points ?? 0;
+    const historicalPoints = dbUser?.historical_points ?? 0;
+
+    // TierCalculator POO — umbrales correctos desde constants.js
+    const tierCalc = new TierCalculator(historicalPoints);
+    const tierInfo = tierCalc.toInfo();
+    const TIER_ICONS = { Diamond: Trophy, Gold: Star, Silver: Target, Bronze: Zap };
+    // Compatibilidad con el JSX existente que usa tier.name, tier.bg, etc.
+    const tier = {
+        name:     tierInfo.name,
+        color:    tierInfo.color,
+        bg:       `${tierInfo.gradient} opacity-20`,
+        next:     tierInfo.next,
+        progress: tierInfo.progress,
+        icon:     TIER_ICONS[tierInfo.name] || Zap,
     };
-    const tier = getTier(points);
     const TierIcon = tier.icon;
     const roleLabel = { admin: 'Administrador', local: 'Local', client: 'Cliente' }[dbUser?.user_type] || 'Cliente';
     const RoleIcon = dbUser?.user_type === 'admin' ? Shield : dbUser?.user_type === 'local' ? Store : User;

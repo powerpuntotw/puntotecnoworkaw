@@ -1,6 +1,7 @@
 import { useAuth } from '../context/AuthContext';
 import { useBranding } from '../context/BrandingContext';
 import { Layers, Shield } from 'lucide-react';
+import { TIER_THRESHOLDS, TIER_NAMES } from '../lib/constants';
 
 export const Landing = () => {
     const { loginWithGoogle, user } = useAuth();
@@ -105,10 +106,10 @@ export const Landing = () => {
                     <p className="text-gray-400 max-w-2xl mx-auto mb-16 text-lg">El primer ecosistema de impresión gamificado. El 10% de lo que gastas vuelve en puntos a tu billetera virtual.</p>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                         {[
-                            { title: 'Bronce', pts: '0 Pts', color: 'from-[#cd7f32]/20 to-[#cd7f32]/5', text: 'text-[#cd7f32]' },
-                            { title: 'Plata', pts: '1,000 Pts', color: 'from-gray-300/20 to-gray-300/5', text: 'text-gray-300' },
-                            { title: 'Oro', pts: '2,000 Pts', color: 'from-warning/20 to-warning/5', text: 'text-warning' },
-                            { title: 'Diamante', pts: '3,000 Pts', color: 'from-secondary/20 to-secondary/5', text: 'text-secondary' },
+                            { title: TIER_NAMES.BRONZE,  pts: `${TIER_THRESHOLDS.BRONZE} Pts`,  color: 'from-[#cd7f32]/20 to-[#cd7f32]/5', text: 'text-[#cd7f32]' },
+                            { title: TIER_NAMES.SILVER,  pts: `${TIER_THRESHOLDS.SILVER.toLocaleString('es-AR')} Pts`,  color: 'from-gray-300/20 to-gray-300/5',   text: 'text-gray-300'   },
+                            { title: TIER_NAMES.GOLD,    pts: `${TIER_THRESHOLDS.GOLD.toLocaleString('es-AR')} Pts`,    color: 'from-warning/20 to-warning/5',     text: 'text-warning'    },
+                            { title: TIER_NAMES.DIAMOND, pts: `${TIER_THRESHOLDS.DIAMOND.toLocaleString('es-AR')} Pts`, color: 'from-secondary/20 to-secondary/5', text: 'text-secondary'  },
                         ].map((tier, i) => (
                             <div key={i} className={`p-8 rounded-3xl bg-gradient-to-br ${tier.color} border border-white/5 glass hover:-translate-y-2 transition-transform duration-300`}>
                                 <div className={`text-4xl font-black ${tier.text} mb-2 drop-shadow-md`}>{tier.title}</div>

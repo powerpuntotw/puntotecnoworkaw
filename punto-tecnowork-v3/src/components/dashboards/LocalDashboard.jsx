@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
-import { databases } from '../../lib/appwrite';
+import { databases, withRetry, ConnectionMonitor } from '../../lib/appwrite';
 import { Query } from 'appwrite';
-import { Loader2, Package, CheckCircle2, TrendingUp, DollarSign, Clock, Activity, Star } from 'lucide-react';
+import { Loader2, Package, CheckCircle2, TrendingUp, DollarSign, Clock, Activity, Star, Wifi, WifiOff, AlertTriangle } from 'lucide-react';
 
 export const LocalDashboard = ({ locationId }) => {
     const [loading, setLoading] = useState(true);
@@ -12,25 +12,80 @@ export const LocalDashboard = ({ locationId }) => {
         weeklyRevenue: 0, totalPointsEarned: 0
     });
     const heartbeatRef = useRef(null);
+    // BLINDAJE: Estado de conexión del heartbeat
+    const [hbStatus, setHbStatus] = useState('connecting'); // 'ok' | 'retrying' | 'offline' | 'connecting'
+    const [lastHbTime, setLastHbTime] = useState(null);
+    const hbFailCountRef = useRef(0);
+    const MAX_BACKOFF_MS = 5 * 60 * 1000; // 5 min máximo
+    const BASE_INTERVAL_MS = 60_000;      // 60s éxito
 
     useEffect(() => {
         if (!locationId) return;
+
+        let active = true;
+
         const sendHeartbeat = async () => {
+            if (!ConnectionMonitor.isOnline) {
+                setHbStatus('offline');
+                return;
+            }
             try {
-                await databases.updateDocument(
-                    import.meta.env.VITE_APPWRITE_DATABASE_ID, 'printing_locations', locationId,
-                    { last_active_at: Math.floor(Date.now() / 1000) }
+                await withRetry(
+                    () => databases.updateDocument(
+                        import.meta.env.VITE_APPWRITE_DATABASE_ID,
+                        'printing_locations', locationId,
+                        { last_active_at: Math.floor(Date.now() / 1000) }
+                    ),
+                    { maxRetries: 2, baseDelayMs: 1000 }
                 );
-            } catch { }
+                hbFailCountRef.current = 0;
+                setHbStatus('ok');
+                setLastHbTime(new Date());
+            } catch {
+                hbFailCountRef.current += 1;
+                setHbStatus('retrying');
+            }
         };
+
+        // Lanzar el próximo heartbeat con backoff si hubo fallo
+        const scheduleNext = () => {
+            const fails = hbFailCountRef.current;
+            const delay = fails === 0
+                ? BASE_INTERVAL_MS
+                : Math.min(BASE_INTERVAL_MS * Math.pow(2, fails - 1), MAX_BACKOFF_MS);
+            heartbeatRef.current = setTimeout(async () => {
+                if (!active) return;
+                await sendHeartbeat();
+                scheduleNext();
+            }, delay);
+        };
+
         const handleVisibility = () => {
-            if (document.hidden) clearInterval(heartbeatRef.current);
-            else { sendHeartbeat(); heartbeatRef.current = setInterval(sendHeartbeat, 60000); }
+            clearTimeout(heartbeatRef.current);
+            if (!document.hidden) { sendHeartbeat().then(scheduleNext); }
         };
+
+        const handleOnline = (online) => {
+            if (online) {
+                clearTimeout(heartbeatRef.current);
+                sendHeartbeat().then(scheduleNext);
+            } else {
+                setHbStatus('offline');
+            }
+        };
+
         document.addEventListener('visibilitychange', handleVisibility);
-        sendHeartbeat();
-        heartbeatRef.current = setInterval(sendHeartbeat, 60000);
-        return () => { document.removeEventListener('visibilitychange', handleVisibility); clearInterval(heartbeatRef.current); };
+        const unsubOnline = ConnectionMonitor.subscribe(handleOnline);
+
+        setHbStatus('connecting');
+        sendHeartbeat().then(scheduleNext);
+
+        return () => {
+            active = false;
+            clearTimeout(heartbeatRef.current);
+            document.removeEventListener('visibilitychange', handleVisibility);
+            unsubOnline();
+        };
     }, [locationId]);
 
     const fetchStats = async () => {
@@ -39,10 +94,10 @@ export const LocalDashboard = ({ locationId }) => {
             setLoading(true);
             const dbId = import.meta.env.VITE_APPWRITE_DATABASE_ID;
             const [locRes, ordersRes] = await Promise.all([
-                databases.getDocument(dbId, 'printing_locations', locationId),
-                databases.listDocuments(dbId, 'orders', [
+                withRetry(() => databases.getDocument(dbId, 'printing_locations', locationId)),
+                withRetry(() => databases.listDocuments(dbId, 'orders', [
                     Query.equal('location_id', locationId), Query.limit(500)
-                ])
+                ]))
             ]);
             setLocationName(locRes.name);
             const orders = ordersRes.documents;
@@ -117,18 +172,42 @@ export const LocalDashboard = ({ locationId }) => {
             <div className="bg-gradient-to-r from-primary/10 to-transparent border border-primary/20 rounded-[2.5rem] p-7 flex flex-col md:flex-row items-center justify-between gap-5 shadow-2xl relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-48 h-full bg-primary/5 blur-3xl rounded-full translate-x-1/2" />
                 <div className="flex items-center gap-5 relative z-10">
-                    <div className="w-14 h-14 rounded-[1.5rem] bg-primary/20 flex items-center justify-center text-primary shadow-glow border border-primary/20">
-                        <Activity size={28} />
+                    <div className={`w-14 h-14 rounded-[1.5rem] flex items-center justify-center shadow-glow border transition ${
+                        hbStatus === 'ok'         ? 'bg-success/20 border-success/30 text-success' :
+                        hbStatus === 'retrying'   ? 'bg-yellow-500/20 border-yellow-500/30 text-yellow-400' :
+                        hbStatus === 'offline'    ? 'bg-gray-800 border-gray-700 text-gray-500' :
+                        'bg-primary/20 border-primary/20 text-primary'
+                    }`}>
+                        {hbStatus === 'ok'       && <Wifi size={28} />}
+                        {hbStatus === 'retrying' && <AlertTriangle size={28} />}
+                        {hbStatus === 'offline'  && <WifiOff size={28} />}
+                        {hbStatus === 'connecting' && <Activity size={28} className="animate-pulse" />}
                     </div>
                     <div>
-                        <h4 className="text-xl font-black text-white italic uppercase tracking-tight">Conectividad Activa</h4>
-                        <p className="text-gray-400 text-sm">Heartbeat enviado. Sincronización en tiempo real.</p>
+                        <h4 className="text-xl font-black text-white italic uppercase tracking-tight">
+                            {hbStatus === 'ok'         && 'Conectividad Activa'}
+                            {hbStatus === 'retrying'   && 'Reintentando...'}
+                            {hbStatus === 'offline'    && 'Sin Conexión'}
+                            {hbStatus === 'connecting' && 'Conectando...'}
+                        </h4>
+                        <p className="text-sm" style={{
+                            color: hbStatus === 'ok' ? '#9ca3af' : hbStatus === 'retrying' ? '#facc15bb' : '#6b7280'
+                        }}>
+                            {hbStatus === 'ok'       && 'Heartbeat sincronizado. Sucursal visible en tiempo real.'}
+                            {hbStatus === 'retrying' && 'Fallo de conexión. Reintentando con backoff...'}
+                            {hbStatus === 'offline'  && 'El dispositivo está sin internet.'}
+                            {hbStatus === 'connecting' && 'Estableciendo conexión con el servidor...'}
+                        </p>
                     </div>
                 </div>
                 <div className="flex items-center gap-4 relative z-10">
                     <div className="text-right hidden sm:block">
                         <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Último Latido</p>
-                        <p className="text-lg font-bold text-white font-mono italic">{new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false })}</p>
+                        <p className="text-lg font-bold text-white font-mono italic">
+                            {lastHbTime
+                                ? lastHbTime.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
+                                : '--:--'}
+                        </p>
                     </div>
                     <button onClick={fetchStats} className="bg-white/5 hover:bg-white/10 text-white p-3.5 rounded-2xl border border-white/10 transition group shadow-xl">
                         <TrendingUp size={22} className="group-hover:scale-110 transition-transform text-primary" />

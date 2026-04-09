@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { databases, storage } from '../../lib/appwrite';
 import { Query, ID } from 'appwrite';
+import { STORAGE_BUCKETS } from '../../lib/constants';
 import toast from 'react-hot-toast';
 import { Gift, Plus, Search, Loader2, Image as ImageIcon, Trash2, Eye, EyeOff } from 'lucide-react';
 
@@ -48,29 +49,29 @@ export const AdminRewards = () => {
             const dbId = import.meta.env.VITE_APPWRITE_DATABASE_ID;
             
             if (formData.$id) {
-                // Update
                 await databases.updateDocument(dbId, 'rewards', formData.$id, {
-                    name: formData.name,
-                    category: formData.category,
-                    description: formData.description,
-                    points_required: parseInt(formData.points_required),
-                    stock: parseInt(formData.stock),
-                    is_visible: formData.is_visible,
-                    image_id: formData.image_id
+                    name:             formData.name,
+                    title:            formData.name,
+                    category:         formData.category,
+                    description:      formData.description,
+                    points_required:  parseInt(formData.points_required),
+                    stock:            parseInt(formData.stock),
+                    is_visible:       formData.is_visible,
+                    image_id:         formData.image_id,
                 });
-                toast.success("Premio actualizado");
+                toast.success('Premio actualizado');
             } else {
-                // Create
                 await databases.createDocument(dbId, 'rewards', ID.unique(), {
-                    name: formData.name,
-                    category: formData.category,
-                    description: formData.description,
-                    points_required: parseInt(formData.points_required),
-                    stock: parseInt(formData.stock),
-                    is_visible: formData.is_visible,
-                    image_id: formData.image_id
+                    name:             formData.name,
+                    title:            formData.name,
+                    category:         formData.category,
+                    description:      formData.description,
+                    points_required:  parseInt(formData.points_required),
+                    stock:            parseInt(formData.stock),
+                    is_visible:       formData.is_visible,
+                    image_id:         formData.image_id,
                 });
-                toast.success("Premio creado");
+                toast.success('Premio creado');
             }
             setIsModalOpen(false);
             fetchRewards();
@@ -121,7 +122,7 @@ export const AdminRewards = () => {
                         <div key={reward.$id} className="bg-card/50 backdrop-blur-xl border border-white/10 rounded-2xl p-5 shadow-glow group hover:border-primary/30 transition">
                             <div className="relative aspect-square rounded-xl bg-white/5 overflow-hidden mb-4 flex items-center justify-center">
                                 {reward.image_id ? (
-                                    <img src={storage.getFilePreview(import.meta.env.VITE_STORAGE_BUCKET_ID || 'rewards', reward.image_id)} alt={reward.name} className="w-full h-full object-cover" />
+                                    <img src={storage.getFilePreview(STORAGE_BUCKETS.REWARDS, reward.image_id)} alt={reward.name} className="w-full h-full object-cover" />
                                 ) : (
                                     <ImageIcon size={40} className="text-gray-600" />
                                 )}

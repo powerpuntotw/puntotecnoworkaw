@@ -5,15 +5,16 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { Users, Package, MapPin, TrendingUp, DollarSign, Activity, Gift, History, ArrowRight, Wifi, WifiOff } from 'lucide-react';
 import { Link } from 'react-router';
 
-// Misma lógica que AdminLocations: online si last_active_at fue hace < 180s
+// isOnline: last_active_at es Unix timestamp int (segundos)
+// Misma lógica que AdminLocations.jsx — umbral 300s (margen 5x sobre el heartbeat de 60s)
 const isOnline = (lastActiveAt) => {
     if (!lastActiveAt) return false;
-    return (Date.now() - new Date(lastActiveAt).getTime()) / 1000 < 180;
+    return (Math.floor(Date.now() / 1000) - lastActiveAt) < 300;
 };
 
 const timeAgo = (lastActiveAt) => {
     if (!lastActiveAt) return 'sin conexión';
-    const diff = Math.floor((Date.now() - new Date(lastActiveAt).getTime()) / 1000);
+    const diff = Math.floor(Date.now() / 1000) - lastActiveAt;
     if (diff < 60) return `hace ${diff}s`;
     if (diff < 3600) return `hace ${Math.floor(diff / 60)}min`;
     return `hace ${Math.floor(diff / 3600)}h`;

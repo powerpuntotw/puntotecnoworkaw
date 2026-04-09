@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { databases } from '../../lib/appwrite';
 import { Query } from 'appwrite';
+import { TierCalculator } from '../../lib/constants';
 import { Gift, Clock, Star, Trophy, ArrowRight, Zap, Target, Package, FileText, MessageSquare } from 'lucide-react';
 import { Link } from 'react-router';
 
@@ -10,18 +11,22 @@ export const ClientDashboard = () => {
     const [recentOrders, setRecentOrders] = useState([]);
     const [loading, setLoading] = useState(true);
 
-    // FIX: ?? 0 protege contra null (|| 0 no lo hace)
-    const points = dbUser?.points ?? 0;
-    const historicalPoints = dbUser?.historical_points ?? points;
+    // points = saldo canjeable | historical_points = define el tier (nunca baja)
+    const points           = dbUser?.points ?? 0;
+    const historicalPoints = dbUser?.historical_points ?? 0;
 
-    const getTierInfo = (pts) => {
-        if (pts >= 5000) return { name: 'Diamond', icon: <Trophy className="text-[#0093D8]" />, next: 'Nivel Máximo', progress: 100, color: 'from-[#0093D8] to-[#007ba1]' };
-        if (pts >= 2000) return { name: 'Gold', icon: <Star className="text-[#FFC905]" />, next: '5,000 pts para Diamond', progress: (pts/5000)*100, color: 'from-[#FFC905] to-[#cc9f04]' };
-        if (pts >= 500)  return { name: 'Silver', icon: <Target className="text-[#9CA3AF]" />, next: '2,000 pts para Gold', progress: (pts/2000)*100, color: 'from-[#9CA3AF] to-[#6b7280]' };
-        return { name: 'Bronze', icon: <Zap className="text-[#6B7280]" />, next: '500 pts para Silver', progress: (pts/500)*100, color: 'from-[#6B7280] to-[#4b5563]' };
+    // TierCalculator encapsula toda la lógica de tiers (POO)
+    const tierCalc = new TierCalculator(historicalPoints);
+    const tierInfo = tierCalc.toInfo();
+
+    // Icono por tier
+    const TIER_ICONS = {
+        DIAMOND: <Trophy className="text-[#0093D8]" />,
+        GOLD:    <Star   className="text-[#FFC905]" />,
+        SILVER:  <Target className="text-[#9CA3AF]" />,
+        BRONZE:  <Zap    className="text-[#6B7280]" />,
     };
-
-    const tier = getTierInfo(historicalPoints);
+    const tier = { ...tierInfo, icon: TIER_ICONS[tierInfo.key], color: tierInfo.gradient };
 
     const fetchRecentOrders = async () => {
         try {
@@ -128,7 +133,7 @@ export const ClientDashboard = () => {
                         <h3 className="text-xs font-black text-gray-500 uppercase tracking-widest mb-4">Total Acumulado</h3>
                         <div className="text-5xl font-black text-white mb-6 italic tracking-tight leading-none group-hover:text-primary transition duration-500">
                             {historicalPoints.toLocaleString('es-AR', { hour12: false })}
-                            <span className="block text-xs not-italic font-bold text-gray-600 uppercase mt-2 tracking-widest">Puntos en Carrera</span>
+                            <span className="block text-xs not-italic font-bold text-gray-600 uppercase mt-2 tracking-widest">Puntos históricos</span>
                         </div>
                     </div>
                     <div className="bg-card/40 backdrop-blur-3xl border border-white/5 rounded-[2rem] p-8 space-y-6 shadow-glow">

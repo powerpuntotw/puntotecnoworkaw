@@ -2,14 +2,18 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { databases, storage } from '../lib/appwrite';
 import { Query, ID } from 'appwrite';
+import { STORAGE_BUCKETS } from '../lib/constants';
 import toast from 'react-hot-toast';
-import { Gift, Star, ArrowRight, Loader2, Info, CheckCircle } from 'lucide-react';
+import { Gift, Star, ArrowRight, Loader2, Info, CheckCircle, MapPin } from 'lucide-react';
 
 export const RewardsCatalog = () => {
     const { user, dbUser, checkSession } = useAuth();
     const [rewards, setRewards] = useState([]);
+    const [locations, setLocations] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [isProcessing, setIsProcessing] = useState(null); // reward.$id del que se está procesando
+    const [isProcessing, setIsProcessing] = useState(null);
+    // Sucursal seleccionada para retirar el canje
+    const [selectedLocationId, setSelectedLocationId] = useState('');
 
     const points = dbUser?.points ?? 0;
 
@@ -27,42 +31,79 @@ export const RewardsCatalog = () => {
         }
     };
 
-    useEffect(() => { fetchRewards(); }, []);
+    const fetchLocations = async () => {
+        try {
+            const res = await databases.listDocuments(
+                import.meta.env.VITE_APPWRITE_DATABASE_ID, 'printing_locations',
+                [Query.equal('status', 'activo'), Query.limit(50)]
+            );
+            setLocations(res.documents);
+            if (res.documents.length > 0) setSelectedLocationId(res.documents[0].$id);
+        } catch (e) { console.error(e); }
+    };
+
+    useEffect(() => { fetchRewards(); fetchLocations(); }, []);
 
     const handleRedeem = async (reward) => {
-        const cost = reward.points_required; // FIX: campo correcto del schema
-        if ((points ?? 0) < cost) { toast.error("No tenés puntos suficientes."); return; }
-        if (!window.confirm(`¿Canjear "${reward.name}" por ${cost} puntos?`)) return;
+        const cost = reward.points_required;
+        if (!selectedLocationId) { toast.error('Seleccioná una sucursal para retirar el premio.'); return; }
+
+        // Validar saldo FRESCO desde Appwrite para evitar race condition
         try {
             setIsProcessing(reward.$id);
             const dbId = import.meta.env.VITE_APPWRITE_DATABASE_ID;
+
+            // 1. Fetch saldo actualizado
+            const freshUser = await databases.getDocument(dbId, 'users', dbUser.$id);
+            const freshPoints = freshUser.points ?? 0;
+            if (freshPoints < cost) {
+                toast.error(`Saldo insuficiente. Tenés ${freshPoints} pts, necesitás ${cost} pts.`);
+                checkSession();
+                return;
+            }
+
+            if (!window.confirm(`¿Canjear "${reward.name}" por ${cost} puntos?\nRetiro en: ${locations.find(l => l.$id === selectedLocationId)?.name}`)) return;
+
             const redeemCode = Math.random().toString(36).substring(2, 10).toUpperCase();
-            // 1. Crear redeem
+
+            // 2. Crear redeem con location_id para que el local pueda verlo
             await databases.createDocument(dbId, 'redeems', ID.unique(), {
-                client_id: user.$id,
+                client_id:   user.$id,
                 client_name: dbUser?.full_name || user.name,
-                reward_id: reward.$id,
+                reward_id:   reward.$id,
                 reward_name: reward.name,
                 points_cost: cost,
-                status: 'pendiente',
-                code: redeemCode
+                status:      'pendiente',
+                code:        redeemCode,
+                location_id: selectedLocationId,
             });
-            // 2. Restar puntos
+
+            // 3. Descontar puntos (solo saldo canjeable, no historical_points)
             await databases.updateDocument(dbId, 'users', dbUser.$id, {
-                points: (points ?? 0) - cost
+                points: freshPoints - cost,
             });
-            // 3. Log en historial
+
+            // 4. Decrementar stock del premio
+            if (reward.stock > 0) {
+                await databases.updateDocument(dbId, 'rewards', reward.$id, {
+                    stock: reward.stock - 1,
+                });
+            }
+
+            // 5. Log en historial de puntos
             await databases.createDocument(dbId, 'points_history', ID.unique(), {
                 client_id: user.$id,
-                type: 'minus',
-                amount: cost,
-                reason: `Canje: ${reward.name}`
+                type:      'minus',
+                amount:    cost,
+                reason:    `Canje: ${reward.name}`,
             });
+
             toast.success(`¡Canje exitoso! Código: ${redeemCode}`, { duration: 7000 });
-            checkSession(); // Refrescar puntos en contexto
+            checkSession();
+            fetchRewards(); // Actualizar stock en UI
         } catch (error) {
-            console.error("Redeem error:", error);
-            toast.error("Error al procesar el canje.");
+            console.error('Redeem error:', error);
+            toast.error('Error al procesar el canje.');
         } finally {
             setIsProcessing(null);
         }
@@ -84,6 +125,29 @@ export const RewardsCatalog = () => {
                     </div>
                 </div>
             </div>
+
+            {/* Selector de sucursal de retiro — mobile first */}
+            {locations.length > 0 && (
+                <div className="bg-card/50 border border-white/10 rounded-[28px] p-5 sm:p-6">
+                    <div className="flex items-center gap-2 mb-3">
+                        <MapPin size={16} className="text-primary shrink-0" />
+                        <h2 className="text-sm font-black text-white uppercase tracking-widest">¿Dónde retirás el premio?</h2>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                        {locations.map(loc => (
+                            <button key={loc.$id} onClick={() => setSelectedLocationId(loc.$id)}
+                                className={`text-left p-4 rounded-2xl border transition-all ${
+                                    selectedLocationId === loc.$id
+                                        ? 'border-primary bg-primary/10 ring-2 ring-primary/30'
+                                        : 'border-white/10 bg-white/5 hover:border-white/25'
+                                }`}>
+                                <p className="text-sm font-black text-white truncate">{loc.name}</p>
+                                <p className="text-[10px] text-gray-500 mt-0.5 truncate">{loc.address}</p>
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            )}
 
             {loading ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { databases } from '../../lib/appwrite';
 import { Query, ID } from 'appwrite';
+import { calcPointsToEarn } from '../../lib/constants';
 import toast from 'react-hot-toast';
 import { Loader2, CheckCircle, Search, Package, FileText, Maximize, Palette, Printer } from 'lucide-react';
 import { PrintWizard } from './PrintWizard';
@@ -31,18 +32,30 @@ export const LocalOrders = ({ locationId }) => {
 
     useEffect(() => { fetchOrders(); }, [locationId]);
 
+    // ── awardPoints ──────────────────────────────────────────────────
+    // Lee el saldo FRESCO desde Appwrite antes de sumar para evitar
+    // race conditions cuando dos órdenes del mismo cliente se entregan
+    // casi simultáneamente. Actualiza AMBOS campos:
+    //   • points          — saldo canjeable (puede bajar al canjear)
+    //   • historical_points — acumulado histórico (NUNCA baja, define el tier)
     const awardPoints = async (order) => {
-        const pts = order.points_earned || 0;
+        const pts = order.points_earned || calcPointsToEarn(order.total_price);
         if (pts <= 0) return;
         try {
             const dbId = import.meta.env.VITE_APPWRITE_DATABASE_ID;
+            // Fetch fresco para evitar race condition
             const userRes = await databases.listDocuments(dbId, 'users', [Query.equal('auth_id', order.client_id)]);
             if (userRes.documents.length === 0) return;
             const userDoc = userRes.documents[0];
-            await databases.updateDocument(dbId, 'users', userDoc.$id, { points: (userDoc.points ?? 0) + pts });
+            await databases.updateDocument(dbId, 'users', userDoc.$id, {
+                points:             (userDoc.points             ?? 0) + pts,
+                historical_points:  (userDoc.historical_points  ?? 0) + pts,
+            });
             await databases.createDocument(dbId, 'points_history', ID.unique(), {
-                client_id: order.client_id, type: 'plus', amount: pts,
-                reason: `Orden entregada: ${order.order_number || order.$id.substring(0, 8).toUpperCase()}`
+                client_id: order.client_id,
+                type:      'plus',
+                amount:    pts,
+                reason:    `Orden entregada: ${order.order_number || order.$id.substring(0, 8).toUpperCase()}`,
             });
         } catch (err) { console.error('Error awarding points:', err); }
     };

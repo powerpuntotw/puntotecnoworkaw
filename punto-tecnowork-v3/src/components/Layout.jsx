@@ -1,12 +1,59 @@
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router';
-import { Home, FileText, Gift, LogOut, Ticket, Users, MapPin, BarChart3, Settings, MessageSquare, Palette, History, UserCircle, DollarSign, AlertTriangle, Sun, Moon, Menu, X, Bell } from 'lucide-react';
-import { useState, useEffect, useRef } from 'react';
+import { Home, FileText, Gift, LogOut, Ticket, Users, MapPin, BarChart3, Settings, MessageSquare, Palette, History, UserCircle, DollarSign, AlertTriangle, Sun, Moon, Menu, X, Bell, Wifi, WifiOff } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useBranding } from '../context/BrandingContext';
 import { useTheme } from '../context/ThemeContext';
-import { databases, client } from '../lib/appwrite';
+import { databases, client, withRetry, ConnectionMonitor } from '../lib/appwrite';
 import { Query } from 'appwrite';
 import { Link } from 'react-router';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BLINDAJE: useAppwriteRealtime — suscripción con auto-reconexión.
+// Cada vez que la conexión se pierde y recupera, re-suscribe automáticamente.
+// ─────────────────────────────────────────────────────────────────────────────
+function useAppwriteRealtime(channels, handler, deps = []) {
+    const handlerRef = useRef(handler);
+    handlerRef.current = handler;
+    const unsubsRef = useRef([]);
+    const retryTimerRef = useRef(null);
+
+    const subscribe = useCallback(() => {
+        // Limpiar suscripciones anteriores
+        unsubsRef.current.forEach(fn => { try { fn(); } catch { } });
+        unsubsRef.current = [];
+        if (!ConnectionMonitor.isOnline) return;
+        unsubsRef.current = channels.map(ch =>
+            client.subscribe(ch, (response) => handlerRef.current(response))
+        );
+    }, [channels.join('|')]);
+
+    useEffect(() => {
+        subscribe();
+        // Reconectar cuando vuelve el internet
+        const unsub = ConnectionMonitor.subscribe((isOnline) => {
+            clearTimeout(retryTimerRef.current);
+            if (isOnline) {
+                retryTimerRef.current = setTimeout(subscribe, 2000);
+            }
+        });
+        // Reconectar cuando la pestaña vuelve al foco
+        const onVisible = () => {
+            if (!document.hidden && ConnectionMonitor.isOnline) {
+                clearTimeout(retryTimerRef.current);
+                retryTimerRef.current = setTimeout(subscribe, 1000);
+            }
+        };
+        document.addEventListener('visibilitychange', onVisible);
+        return () => {
+            unsubsRef.current.forEach(fn => { try { fn(); } catch { } });
+            unsub();
+            document.removeEventListener('visibilitychange', onVisible);
+            clearTimeout(retryTimerRef.current);
+        };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [subscribe, ...deps]);
+}
 
 // Sonido de alerta — Web Audio API, sin dependencias
 const playAlert = () => {
@@ -33,6 +80,13 @@ export const MainLayout = () => {
     const location = useLocation();
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
+    // ── BLINDAJE: banner de conexión global ───────────────────
+    const [isOffline, setIsOffline] = useState(!ConnectionMonitor.isOnline);
+    useEffect(() => {
+        const unsub = ConnectionMonitor.subscribe((online) => setIsOffline(!online));
+        return unsub;
+    }, []);
+
     // ── Alerta global de soporte ──────────────────────────────
     const [unreadCount, setUnreadCount] = useState(0);
     const [showSupportAlert, setShowSupportAlert] = useState(false);
@@ -44,57 +98,53 @@ export const MainLayout = () => {
         if (!dbUser) return;
         const dbId = import.meta.env.VITE_APPWRITE_DATABASE_ID;
         const isAdmin = dbUser.user_type === 'admin';
-
-        // Cargar cantidad inicial de tickets abiertos
+        // Cargar cantidad inicial de tickets abiertos (blindado con withRetry)
         const loadInitial = async () => {
             try {
                 const queries = [Query.equal('status', 'open'), Query.orderDesc('$createdAt'), Query.limit(20)];
                 if (!isAdmin) queries.push(Query.equal('client_id', user.$id));
-                const res = await databases.listDocuments(dbId, 'tickets', queries);
+                const res = await withRetry(() => databases.listDocuments(dbId, 'tickets', queries));
                 setUnreadCount(res.documents.length);
                 if (res.documents.length > 0) setLatestTicketSubject(res.documents[0].subject);
                 initialLoadDone.current = true;
             } catch { }
         };
         loadInitial();
+    }, [dbUser?.user_type]);
 
-        // Realtime: escuchar nuevos tickets y mensajes
-        const unsubTickets = client.subscribe(
-            `databases.${dbId}.collections.tickets.documents`,
-            response => {
-                if (!initialLoadDone.current) return;
-                if (response.events.some(e => e.includes('.create'))) {
-                    const t = response.payload;
-                    // Admin ve todos; cliente solo los suyos
-                    if (!isAdmin && t.client_id !== user.$id) return;
-                    setUnreadCount(prev => prev + 1);
-                    setLatestTicketSubject(t.subject);
-                    if (!isOnTicketsPage) {
-                        setShowSupportAlert(true);
-                        playAlert();
-                    }
-                }
+    // BLINDAJE: Realtime tickets — auto-reconexión vía useAppwriteRealtime
+    const dbId = import.meta.env.VITE_APPWRITE_DATABASE_ID;
+    useAppwriteRealtime(
+        dbUser ? [`databases.${dbId}.collections.tickets.documents`] : [],
+        (response) => {
+            if (!initialLoadDone.current) return;
+            if (!response.events.some(e => e.includes('.create'))) return;
+            const t = response.payload;
+            const isAdmin = dbUser?.user_type === 'admin';
+            if (!isAdmin && t.client_id !== user?.$id) return;
+            setUnreadCount(prev => prev + 1);
+            setLatestTicketSubject(t.subject);
+            if (!isOnTicketsPage) { setShowSupportAlert(true); playAlert(); }
+        },
+        [!!dbUser]
+    );
+
+    // BLINDAJE: Realtime messages — auto-reconexión vía useAppwriteRealtime
+    useAppwriteRealtime(
+        dbUser ? [`databases.${dbId}.collections.messages.documents`] : [],
+        (response) => {
+            if (!initialLoadDone.current) return;
+            if (!response.events.some(e => e.includes('.create'))) return;
+            const msg = response.payload;
+            if (msg.sender_id === user?.$id) return;
+            if (!isOnTicketsPage) {
+                setShowSupportAlert(true);
+                setLatestTicketSubject(prev => prev || 'Nuevo mensaje de soporte');
+                playAlert();
             }
-        );
-
-        const unsubMessages = client.subscribe(
-            `databases.${dbId}.collections.messages.documents`,
-            response => {
-                if (!initialLoadDone.current) return;
-                if (!response.events.some(e => e.includes('.create'))) return;
-                const msg = response.payload;
-                // No alertar por mensajes propios
-                if (msg.sender_id === user.$id) return;
-                if (!isOnTicketsPage) {
-                    setShowSupportAlert(true);
-                    setLatestTicketSubject(prev => prev || 'Nuevo mensaje de soporte');
-                    playAlert();
-                }
-            }
-        );
-
-        return () => { unsubTickets(); unsubMessages(); };
-    }, [dbUser?.user_type, isOnTicketsPage]);
+        },
+        [!!dbUser]
+    );
 
     // Ocultar alerta al entrar a /tickets
     useEffect(() => {
@@ -253,6 +303,18 @@ export const MainLayout = () => {
                         </div>
                     </div>
                 </header>
+
+                {/* ── BLINDAJE: Banner de sin conexión ── */}
+                {isOffline && (
+                    <div className="mx-3 sm:mx-4 mt-3 flex items-center gap-3 bg-gray-900 border border-gray-700 rounded-2xl px-4 py-3 animate-in slide-in-from-top-2 duration-300">
+                        <WifiOff size={16} className="text-gray-400 shrink-0 animate-pulse" />
+                        <div className="flex-1 min-w-0">
+                            <p className="text-gray-300 font-black text-sm uppercase tracking-tight">Sin conexión a internet</p>
+                            <p className="text-gray-500 text-xs">Los datos mostrados pueden no ser actuales. Reconectando...</p>
+                        </div>
+                        <Wifi size={14} className="text-gray-600 shrink-0" />
+                    </div>
+                )}
 
                 {/* ── Banner alerta soporte — aparece en CUALQUIER pantalla ── */}
                 {showSupportAlert && !isOnTicketsPage && (
