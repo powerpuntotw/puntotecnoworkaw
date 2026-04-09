@@ -6,7 +6,18 @@ import toast, { Toaster } from 'react-hot-toast';
 import { databases, storage } from '../lib/appwrite';
 import { ID, Query } from 'appwrite';
 import { useNavigate } from 'react-router';
-import { HeartbeatService } from '../lib/constants';
+// isOnline/timeAgo — misma lógica que AdminDashboard (umbral 300s = 5× heartbeat de 60s)
+const isOnline = (lastActiveAt) => {
+    if (!lastActiveAt) return false;
+    return (Math.floor(Date.now() / 1000) - lastActiveAt) < 300;
+};
+const timeAgo = (lastActiveAt) => {
+    if (!lastActiveAt) return 'sin conexión';
+    const diff = Math.floor(Date.now() / 1000) - lastActiveAt;
+    if (diff < 60) return `hace ${diff}s`;
+    if (diff < 3600) return `hace ${Math.floor(diff / 60)}min`;
+    return `hace ${Math.floor(diff / 3600)}h`;
+};
 
 // Genera order_number único: PT + base36 del timestamp
 const genOrderNumber = () => 'PT' + Date.now().toString(36).toUpperCase();
@@ -147,10 +158,10 @@ export const NewOrderFlow = () => {
         <div className="flex h-screen items-center justify-center text-primary"><Loader2 className="animate-spin" size={48} /></div>
     );
 
-    // LocationCard — mobile first, muestra estado online real vía HeartbeatService
+    // LocationCard — mobile first, muestra estado online real vía heartbeat
     const LocationCard = ({ loc, selected, onSelect }) => {
-        const online = HeartbeatService.isOnline(loc.last_active_at);
-        const lastSeen = HeartbeatService.timeAgo(loc.last_active_at);
+        const online = isOnline(loc.last_active_at);
+        const lastSeen = timeAgo(loc.last_active_at);
         return (
         <div
             onClick={() => onSelect(loc)}
