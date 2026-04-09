@@ -2,14 +2,17 @@ import { useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { account, databases } from '../lib/appwrite';
 import { Query, ID } from 'appwrite';
+import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 
 // AuthCallback — flujo createOAuth2Token (sin cookies cross-domain)
 // Appwrite redirige a /auth/callback?userId=...&secret=...
-// Lo usamos para crear la sesión explícitamente via account.createSession()
+// IMPORTANTE: después de createSession hay que esperar un breve delay
+// antes de llamar account.get() para que la sesión se propague correctamente.
 export const AuthCallback = () => {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
+    const { checkSession } = useAuth();
     const didRun = useRef(false);
 
     useEffect(() => {
@@ -39,12 +42,31 @@ export const AuthCallback = () => {
 
             try {
                 if (userId && secret) {
-                    // Flujo token: crear sesión con los parámetros de la URL
+                    // Crear sesión con los parámetros de la URL
                     await account.createSession(userId, secret);
+                    // Esperar a que Appwrite propague la sesión antes de consultarla.
+                    // Sin este delay, account.get() devuelve 401 aunque la sesión
+                    // se haya creado exitosamente (race condition en el servidor).
+                    await new Promise(resolve => setTimeout(resolve, 800));
                 }
-                // Si ya había sesión activa (re-ingreso directo), omitimos createSession
 
-                const sessionData = await account.get();
+                // Reintentos: la sesión puede tardar un poco en estar disponible
+                let sessionData = null;
+                for (let attempt = 0; attempt < 4; attempt++) {
+                    try {
+                        sessionData = await account.get();
+                        break; // éxito
+                    } catch (err) {
+                        if (err.code === 401 && attempt < 3) {
+                            // Sesión aún no propagada — esperar y reintentar
+                            await new Promise(resolve => setTimeout(resolve, 600 * (attempt + 1)));
+                        } else {
+                            throw err;
+                        }
+                    }
+                }
+
+                if (!sessionData) throw new Error('No se pudo obtener la sesión tras varios intentos');
 
                 const dbUserData = await databases.listDocuments(
                     import.meta.env.VITE_APPWRITE_DATABASE_ID,
@@ -70,12 +92,17 @@ export const AuthCallback = () => {
                     toast.success(`¡Bienvenido de nuevo, ${sessionData.name?.split(' ')[0] || ''}!`);
                 }
 
-                // AuthContext leerá la sesión al montar el dashboard
+                // Forzar re-lectura del contexto antes de navegar
+                // Esto evita el bug del F5 donde el dashboard carga en blanco
+                // porque AuthContext ya hizo su checkSession inicial sin sesión
+                await checkSession();
+
+                // Navegar al dashboard — AuthContext leerá la sesión al montar
                 navigate('/dashboard', { replace: true });
 
             } catch (error) {
-                console.error("Error en OAuth callback:", error);
-                toast.error("No se pudo iniciar sesión. Por favor intentá de nuevo.");
+                console.error('Error en OAuth callback:', error);
+                toast.error('No se pudo iniciar sesión. Por favor intentá de nuevo.');
                 navigate('/', { replace: true });
             }
         };
