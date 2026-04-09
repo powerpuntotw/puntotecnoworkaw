@@ -4,25 +4,9 @@ import { account, databases } from '../lib/appwrite';
 import { Query, ID } from 'appwrite';
 import toast from 'react-hot-toast';
 
-// Retry con backoff exponencial para el race-condition del OAuth
-const accountGetWithRetry = async (maxRetries = 6, baseDelayMs = 600) => {
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-        try {
-            return await account.get();
-        } catch (err) {
-            const isAuthError = err?.code === 401 || err?.message?.includes('missing scopes');
-            if (isAuthError && attempt < maxRetries) {
-                // backoff: 600ms, 1.2s, 2.4s, 4.8s, 9.6s
-                await new Promise(r => setTimeout(r, baseDelayMs * Math.pow(2, attempt - 1)));
-                continue;
-            }
-            throw err;
-        }
-    }
-};
-
-// AuthCallback maneja el OAuth sin depender del AuthContext
-// para evitar conflictos con el isCheckingRef del contexto
+// AuthCallback — flujo createOAuth2Token (sin cookies cross-domain)
+// Appwrite redirige a /auth/callback?userId=...&secret=...
+// Lo usamos para crear la sesión explícitamente via account.createSession()
 export const AuthCallback = () => {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
@@ -49,9 +33,18 @@ export const AuthCallback = () => {
                 return;
             }
 
+            // Leer userId + secret del token OAuth (createOAuth2Token flow)
+            const userId = searchParams.get('userId');
+            const secret = searchParams.get('secret');
+
             try {
-                // Retry con backoff para manejar el race-condition OAuth
-                const sessionData = await accountGetWithRetry();
+                if (userId && secret) {
+                    // Flujo token: crear sesión con los parámetros de la URL
+                    await account.createSession(userId, secret);
+                }
+                // Si ya había sesión activa (re-ingreso directo), omitimos createSession
+
+                const sessionData = await account.get();
 
                 const dbUserData = await databases.listDocuments(
                     import.meta.env.VITE_APPWRITE_DATABASE_ID,
@@ -60,7 +53,7 @@ export const AuthCallback = () => {
                 );
 
                 if (dbUserData.documents.length === 0) {
-                    // Usuario nuevo — crear registro
+                    // Usuario nuevo — crear registro en la colección users
                     await databases.createDocument(
                         import.meta.env.VITE_APPWRITE_DATABASE_ID,
                         'users',
@@ -77,7 +70,7 @@ export const AuthCallback = () => {
                     toast.success(`¡Bienvenido de nuevo, ${sessionData.name?.split(' ')[0] || ''}!`);
                 }
 
-                // Navegar al dashboard — AuthContext va a leer la sesión al montar
+                // AuthContext leerá la sesión al montar el dashboard
                 navigate('/dashboard', { replace: true });
 
             } catch (error) {

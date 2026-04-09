@@ -113,7 +113,9 @@ export const AuthProvider = ({ children }) => {
     }, [checkSession]);
 
     const loginWithGoogle = () => {
-        account.createOAuth2Session(
+        // createOAuth2Token: enfoque basado en token (no cookies)
+        // necesario cuando el frontend y Appwrite están en dominios distintos
+        account.createOAuth2Token(
             OAuthProvider.Google,
             `${window.location.origin}/auth/callback`,
             `${window.location.origin}/`
