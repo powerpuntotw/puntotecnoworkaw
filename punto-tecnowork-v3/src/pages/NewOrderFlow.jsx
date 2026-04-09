@@ -1,11 +1,12 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { UploadCloud, X, Printer, Layers, Loader2, Camera, AlertCircle, Sparkles, FileText, MapPin, Clock, CheckCircle2, ChevronRight, ChevronLeft } from 'lucide-react';
+import { UploadCloud, X, Printer, Layers, Loader2, Camera, AlertCircle, Sparkles, FileText, MapPin, Clock, CheckCircle2, ChevronRight, ChevronLeft, Wifi, WifiOff } from 'lucide-react';
 import { useDropzone } from 'react-dropzone';
 import toast, { Toaster } from 'react-hot-toast';
 import { databases, storage } from '../lib/appwrite';
 import { ID, Query } from 'appwrite';
 import { useNavigate } from 'react-router';
+import { HeartbeatService } from '../lib/constants';
 
 // Genera order_number único: PT + base36 del timestamp
 const genOrderNumber = () => 'PT' + Date.now().toString(36).toUpperCase();
@@ -146,8 +147,11 @@ export const NewOrderFlow = () => {
         <div className="flex h-screen items-center justify-center text-primary"><Loader2 className="animate-spin" size={48} /></div>
     );
 
-    // Componente de tarjeta de local (estilo v2)
-    const LocationCard = ({ loc, selected, onSelect }) => (
+    // LocationCard — mobile first, muestra estado online real vía HeartbeatService
+    const LocationCard = ({ loc, selected, onSelect }) => {
+        const online = HeartbeatService.isOnline(loc.last_active_at);
+        const lastSeen = HeartbeatService.timeAgo(loc.last_active_at);
+        return (
         <div
             onClick={() => onSelect(loc)}
             className={`p-5 rounded-2xl border cursor-pointer transition-all duration-200 ${selected ? 'border-primary bg-primary/10 ring-2 ring-primary/30' : 'border-white/10 bg-card/40 hover:border-white/25'}`}
@@ -173,6 +177,16 @@ export const NewOrderFlow = () => {
                 <span className="flex items-center gap-1 text-[9px] font-black px-2 py-1 rounded-lg bg-success/10 border border-success/20 text-success uppercase">
                     <span className="w-1.5 h-1.5 rounded-full bg-success"></span> Abierto
                 </span>
+                {/* Indicador heartbeat real — advierte si el encargado no tiene la app abierta */}
+                {online ? (
+                    <span className="flex items-center gap-1 text-[9px] font-black px-2 py-1 rounded-lg bg-secondary/10 border border-secondary/20 text-secondary uppercase">
+                        <Wifi size={9} /> Atendiendo ahora
+                    </span>
+                ) : (
+                    <span className="flex items-center gap-1 text-[9px] font-black px-2 py-1 rounded-lg bg-yellow-500/10 border border-yellow-500/20 text-yellow-400 uppercase" title={lastSeen}>
+                        <WifiOff size={9} /> Sin operador activo
+                    </span>
+                )}
                 {loc.has_color_printing && (
                     <span className="text-[9px] font-black px-2 py-1 rounded-lg bg-secondary/10 border border-secondary/20 text-secondary uppercase">
                         Color {loc.max_color_size}
@@ -183,7 +197,8 @@ export const NewOrderFlow = () => {
                 </span>
             </div>
         </div>
-    );
+        );
+    };
 
     return (
         <div className="max-w-5xl mx-auto space-y-6 px-4 pb-10">

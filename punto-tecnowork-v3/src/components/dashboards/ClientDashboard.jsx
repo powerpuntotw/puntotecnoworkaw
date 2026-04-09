@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { databases } from '../../lib/appwrite';
 import { Query } from 'appwrite';
-import { TierCalculator } from '../../lib/constants';
+import { TierCalculator, ORDER_STATUS } from '../../lib/constants';
 import { Gift, Clock, Star, Trophy, ArrowRight, Zap, Target, Package, FileText, MessageSquare } from 'lucide-react';
 import { Link } from 'react-router';
 
@@ -93,7 +93,9 @@ export const ClientDashboard = () => {
                                 <Link to="/orders/new" className="text-primary font-black mt-4 inline-block underline decoration-2 underline-offset-4">¡IMPRIMIR AHORA!</Link>
                             </div>
                         ) : (
-                            recentOrders.map(order => (
+                            recentOrders.map(order => {
+                                const statusInfo = ORDER_STATUS[order.status] || ORDER_STATUS.pendiente;
+                                return (
                                 <div key={order.$id} className="bg-card/40 backdrop-blur-xl border border-white/10 p-5 rounded-3xl flex items-center justify-between group hover:border-primary/50 transition shadow-lg">
                                     <div className="flex items-center gap-4">
                                         <div className="w-14 h-14 rounded-2xl bg-white/5 flex items-center justify-center text-gray-500 group-hover:bg-primary/20 group-hover:text-primary transition duration-500 border border-white/5">
@@ -106,14 +108,13 @@ export const ClientDashboard = () => {
                                             <div className="text-xs text-gray-500 font-medium mt-1">{new Date(order.$createdAt).toLocaleDateString()}</div>
                                         </div>
                                     </div>
-                                    <div className="flex items-center gap-6">
-                                        <div className="text-right hidden sm:block">
-                                            <div className="text-xs font-black text-white uppercase tracking-widest">{order.status || 'Recibida'}</div>
-                                            <div className="text-[9px] text-gray-600 font-bold uppercase tracking-tighter">Estado</div>
-                                        </div>
+                                    <div className="flex items-center gap-3 sm:gap-6">
+                                        {/* Badge de estado con color — mobile first */}
+                                        <span className={`hidden sm:inline-flex text-[9px] font-black px-2.5 py-1 rounded-full border uppercase tracking-widest ${statusInfo.bg} ${statusInfo.color} ${statusInfo.border}`}>
+                                            {statusInfo.label}
+                                        </span>
                                         <div className="h-10 w-[1px] bg-white/10 hidden sm:block"></div>
                                         <div className="text-right">
-                                            {/* FIX: total_price es el campo real del schema */}
                                             <div className="text-xl font-black text-white italic tracking-tight">${(order.total_price || 0).toLocaleString('es-AR', { hour12: false })}</div>
                                             <div className="text-[10px] text-success font-black uppercase">+{order.points_earned || Math.round((order.total_price || 0) * 0.1)} pts</div>
                                         </div>
@@ -122,7 +123,8 @@ export const ClientDashboard = () => {
                                         </div>
                                     </div>
                                 </div>
-                            ))
+                                );
+                            })
                         )}
                     </div>
                 </div>
