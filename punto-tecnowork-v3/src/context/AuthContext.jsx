@@ -12,96 +12,105 @@ export const AuthProvider = ({ children }) => {
     const [dbUser, setDbUser] = useState(null);
     const [loading, setLoading] = useState(true);
     const isCheckingRef = useRef(false);
-    // Controla el timer de refresco proactivo de sesión (cada 45 min)
+    const checkingPromiseRef = useRef(null); // Promise compartida: evita fetches paralelos
     const sessionRefreshTimerRef = useRef(null);
 
-    // ─── checkSession: blindada con withRetry ───────────────────────────────
-    const checkSession = useCallback(async () => {
-        if (isCheckingRef.current) return;
-        isCheckingRef.current = true;
-        try {
-            const sessionData = await withRetry(() => account.get(), {
-                maxRetries: 3, baseDelayMs: 800,
-            });
-
-            const dbUserData = await withRetry(
-                () => databases.listDocuments(
-                    import.meta.env.VITE_APPWRITE_DATABASE_ID,
-                    'users',
-                    [Query.equal('auth_id', sessionData.$id)]
-                ),
-                { maxRetries: 3, baseDelayMs: 600 }
-            );
-
-            let currentUserDoc = null;
-            if (dbUserData.documents.length > 0) {
-                currentUserDoc = dbUserData.documents[0];
-                if (currentUserDoc.email === 'powerpuntotw@gmail.com' && currentUserDoc.user_type !== 'admin') {
-                    try {
-                        currentUserDoc = await withRetry(
-                            () => databases.updateDocument(
-                                import.meta.env.VITE_APPWRITE_DATABASE_ID, 'users', currentUserDoc.$id,
-                                { user_type: 'admin' }
-                            )
-                        );
-                        toast.success('¡Cuenta promovida a Administrador automáticamente!');
-                    } catch {
-                        currentUserDoc.user_type = 'admin';
-                    }
-                }
-            } else {
-                currentUserDoc = await withRetry(
-                    () => databases.createDocument(
-                        import.meta.env.VITE_APPWRITE_DATABASE_ID, 'users', ID.unique(),
-                        {
-                            auth_id: sessionData.$id,
-                            full_name: sessionData.name || 'Nuevo Usuario',
-                            email: sessionData.email || '',
-                            user_type: sessionData.email === 'powerpuntotw@gmail.com' ? 'admin' : 'client'
-                        }
-                    )
-                );
-                toast.success('¡Bienvenido! Tu perfil se ha creado exitosamente.');
-            }
-
-            setUser(sessionData);
-            setDbUser(currentUserDoc);
-
-            // Programar refresco proactivo de sesión antes de que expire (45 min)
-            clearTimeout(sessionRefreshTimerRef.current);
-            sessionRefreshTimerRef.current = setTimeout(() => {
-                checkSession();
-            }, 45 * 60 * 1000);
-
-        } catch (error) {
-            setUser(null);
-            setDbUser(null);
-            clearTimeout(sessionRefreshTimerRef.current);
-            if (error.code !== 401) toast.error('Ocurrió un error al verificar la sesión.');
-        } finally {
-            setLoading(false);
-            isCheckingRef.current = false;
+    // checkSession: patron Promise-sharing
+    // Si ya hay un check en curso, el segundo caller recibe la MISMA Promise
+    // en lugar de lanzar un segundo fetch paralelo. Esto resuelve el race condition
+    // del flujo OAuth donde AuthCallback y AuthContext compiten por checkSession.
+    const checkSession = useCallback(() => {
+        // Ya hay un check en curso -> compartir su Promise
+        if (checkingPromiseRef.current) {
+            return checkingPromiseRef.current;
         }
+        if (isCheckingRef.current) return Promise.resolve();
+        isCheckingRef.current = true;
+
+        const doCheck = async () => {
+            try {
+                const sessionData = await withRetry(() => account.get(), {
+                    maxRetries: 3, baseDelayMs: 800,
+                });
+
+                const dbUserData = await withRetry(
+                    () => databases.listDocuments(
+                        import.meta.env.VITE_APPWRITE_DATABASE_ID,
+                        'users',
+                        [Query.equal('auth_id', sessionData.$id)]
+                    ),
+                    { maxRetries: 3, baseDelayMs: 600 }
+                );
+
+                let currentUserDoc = null;
+                if (dbUserData.documents.length > 0) {
+                    currentUserDoc = dbUserData.documents[0];
+                    if (currentUserDoc.email === 'powerpuntotw@gmail.com' && currentUserDoc.user_type !== 'admin') {
+                        try {
+                            currentUserDoc = await withRetry(
+                                () => databases.updateDocument(
+                                    import.meta.env.VITE_APPWRITE_DATABASE_ID, 'users', currentUserDoc.$id,
+                                    { user_type: 'admin' }
+                                )
+                            );
+                            toast.success('Cuenta promovida a Administrador.');
+                        } catch {
+                            currentUserDoc.user_type = 'admin';
+                        }
+                    }
+                } else {
+                    currentUserDoc = await withRetry(
+                        () => databases.createDocument(
+                            import.meta.env.VITE_APPWRITE_DATABASE_ID, 'users', ID.unique(),
+                            {
+                                auth_id: sessionData.$id,
+                                full_name: sessionData.name || 'Nuevo Usuario',
+                                email: sessionData.email || '',
+                                user_type: sessionData.email === 'powerpuntotw@gmail.com' ? 'admin' : 'client',
+                            }
+                        )
+                    );
+                }
+
+                setUser(sessionData);
+                setDbUser(currentUserDoc);
+
+                clearTimeout(sessionRefreshTimerRef.current);
+                sessionRefreshTimerRef.current = setTimeout(() => checkSession(), 45 * 60 * 1000);
+
+            } catch (error) {
+                setUser(null);
+                setDbUser(null);
+                clearTimeout(sessionRefreshTimerRef.current);
+                if (error.code !== 401) toast.error('Error al verificar la sesion.');
+            } finally {
+                setLoading(false);
+                isCheckingRef.current = false;
+                checkingPromiseRef.current = null;
+            }
+        };
+
+        checkingPromiseRef.current = doCheck();
+        return checkingPromiseRef.current;
     }, []);
 
-    // ─── Inicio: cargar sesión ──────────────────────────────────────────────
+
     useEffect(() => {
         checkSession();
         return () => clearTimeout(sessionRefreshTimerRef.current);
     }, [checkSession]);
 
-    // ─── BLINDAJE: reconectar automáticamente al recuperar internet ─────────
+    // Reconectar al recuperar internet
     useEffect(() => {
         const unsubscribe = ConnectionMonitor.subscribe((isOnline) => {
             if (isOnline && !isCheckingRef.current) {
-                // Pequeño delay para que el TCP se estabilice
                 setTimeout(() => checkSession(), 1500);
             }
         });
         return unsubscribe;
     }, [checkSession]);
 
-    // ─── BLINDAJE: reconectar si la ventana vuelve a estar en foco ──────────
+    // Reconectar cuando la ventana vuelve a estar en foco
     useEffect(() => {
         const handleFocus = () => {
             if (!document.hidden && ConnectionMonitor.isOnline && !isCheckingRef.current) {
@@ -113,8 +122,6 @@ export const AuthProvider = ({ children }) => {
     }, [checkSession]);
 
     const loginWithGoogle = () => {
-        // createOAuth2Token: enfoque basado en token (no cookies)
-        // necesario cuando el frontend y Appwrite están en dominios distintos
         account.createOAuth2Token(
             OAuthProvider.Google,
             `${window.location.origin}/auth/callback`,
@@ -128,7 +135,7 @@ export const AuthProvider = ({ children }) => {
             await withRetry(() => account.deleteSession('current'));
             setUser(null);
             setDbUser(null);
-        } catch (error) { console.error('Error logging out:', error); }
+        } catch (error) { console.error('Error logout:', error); }
     };
 
     const updateProfile = async (data) => {
