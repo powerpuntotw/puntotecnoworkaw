@@ -31,15 +31,20 @@ export const AdminReports = () => {
                 activeLocals: new Set(orders.map(o => o.location_id).filter(Boolean)).size
             });
 
-            // Gráfico diario: solo ingresos de entregadas
+            // Gráfico diario: últimos 7 días ordenados cronológicamente
             const daily = {};
             delivered.forEach(o => {
-                const d = new Date(o.$createdAt).toLocaleDateString();
-                if (!daily[d]) daily[d] = { date: d, orders: 0, revenue: 0 };
+                const d = new Date(o.$createdAt).toLocaleDateString('es-AR');
+                const ts = new Date(o.$createdAt).setHours(0,0,0,0); // para ordenar
+                if (!daily[d]) daily[d] = { date: d, orders: 0, revenue: 0, _ts: ts };
                 daily[d].orders++;
                 daily[d].revenue += o.total_price || 0;
             });
-            setDailyData(Object.values(daily).slice(-7));
+            const sortedDaily = Object.values(daily)
+                .sort((a, b) => a._ts - b._ts)  // cronológico ascendente
+                .slice(-7)
+                .map(({ _ts, ...rest }) => rest); // quitar _ts antes de setear
+            setDailyData(sortedDaily);
 
             // Facturación por sucursal: solo entregadas
             const locals = {};

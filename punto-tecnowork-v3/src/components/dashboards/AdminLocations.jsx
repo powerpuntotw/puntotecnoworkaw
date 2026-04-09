@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react';
 import { databases } from '../../lib/appwrite';
+import { useAuth } from '../../context/AuthContext';
 import { Query, ID } from 'appwrite';
 import toast from 'react-hot-toast';
 import { Loader2, Plus, Trash2, Camera, Palette, Maximize, DollarSign, ShieldCheck, MapPin, Settings2, CheckCircle, XCircle, Clock, UserCheck, Wifi, WifiOff } from 'lucide-react';
 
-const logAudit = async (databases, dbId, action, description) => {
+// adminName se pasa desde el componente (dbUser.full_name) para registrar quién actuó
+const logAudit = async (databases, dbId, action, description, adminName = 'Administrador') => {
     try {
-        await databases.createDocument(dbId, 'audit_logs', ID.unique(), { admin_name: 'Administrador', action, description });
+        await databases.createDocument(dbId, 'audit_logs', ID.unique(), { admin_name: adminName, action, description });
     } catch { }
 };
 
@@ -48,6 +50,8 @@ const timeAgo = (lastActiveAt) => {
 };
 
 export const AdminLocations = () => {
+    const { dbUser } = useAuth();
+    const adminName = dbUser?.full_name || 'Administrador';
     const [locations, setLocations] = useState([]);
     const [allUsers, setAllUsers] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -132,7 +136,7 @@ export const AdminLocations = () => {
             setIsPromoting(userId);
             const dbId = import.meta.env.VITE_APPWRITE_DATABASE_ID;
             await databases.updateDocument(dbId, 'users', userId, { user_type: 'local' });
-            await logAudit(databases, dbId, 'Promover a Local', `${user?.full_name} promovido de client a local`);
+            await logAudit(databases, dbId, 'Promover a Local', `${user?.full_name} promovido de client a local`, adminName);
             toast.success(`${user?.full_name} ahora tiene rol Local`);
             setAllUsers(prev => prev.map(u => u.$id === userId ? { ...u, user_type: 'local' } : u));
         } catch (error) {
@@ -156,18 +160,18 @@ export const AdminLocations = () => {
                 finalDoc = await databases.updateDocument(dbId, 'printing_locations', editingLocation.$id, formData);
                 setLocations(locations.map(l => l.$id === finalDoc.$id ? finalDoc : l));
                 toast.success("Sucursal actualizada");
-                await logAudit(databases, dbId, 'Editar Sucursal', `Actualizó: ${formData.name}`);
+                await logAudit(databases, dbId, 'Editar Sucursal', `Actualizó: ${formData.name}`, adminName);
             } else {
                 finalDoc = await databases.createDocument(dbId, 'printing_locations', ID.unique(), formData);
                 setLocations([...locations, finalDoc]);
                 toast.success("Sucursal creada");
-                await logAudit(databases, dbId, 'Crear Sucursal', `Creó: ${formData.name} en ${formData.address}`);
+                await logAudit(databases, dbId, 'Crear Sucursal', `Creó: ${formData.name} en ${formData.address}`, adminName);
             }
             if (newManagerId && newManagerId !== oldManagerId) {
                 await databases.updateDocument(dbId, 'users', newManagerId, { user_type: 'local', location_id: finalDoc.$id });
                 const name = allUsers.find(u => u.$id === newManagerId)?.full_name || newManagerId;
                 toast.success(`${name} asignado como encargado`);
-                await logAudit(databases, dbId, 'Asignar Encargado', `${name} → local, sucursal ${formData.name}`);
+                await logAudit(databases, dbId, 'Asignar Encargado', `${name} → local, sucursal ${formData.name}`, adminName);
             }
             if (oldManagerId && oldManagerId !== newManagerId) {
                 await databases.updateDocument(dbId, 'users', oldManagerId, { user_type: 'client', location_id: null });
@@ -192,7 +196,7 @@ export const AdminLocations = () => {
             }
             await databases.deleteDocument(dbId, 'printing_locations', id);
             setLocations(locations.filter(l => l.$id !== id));
-            await logAudit(databases, dbId, 'Eliminar Sucursal', `Eliminó: ${loc?.name}`);
+            await logAudit(databases, dbId, 'Eliminar Sucursal', `Eliminó: ${loc?.name}`, adminName);
             toast.success("Sucursal eliminada");
         } catch { toast.error("Error al eliminar"); }
     };

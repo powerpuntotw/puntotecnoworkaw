@@ -1,4 +1,4 @@
-import { Routes, Route } from 'react-router';
+import { Routes, Route, Navigate } from 'react-router';
 import { useAuth } from './context/AuthContext';
 import { ProtectedRoute, PublicRoute } from './components/ProtectedRoutes';
 import { MainLayout } from './components/Layout';
@@ -73,6 +73,9 @@ function App() {
                         <Route path="/tickets" element={<TicketsSystem />} />
                     </Route>
                 </Route>
+
+                {/* Catch-all 404 — redirige al dashboard si autenticado, a la raíz si no */}
+                <Route path="*" element={<Navigate to="/dashboard" replace />} />
             </Routes>
         </>
     );
