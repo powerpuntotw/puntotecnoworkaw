@@ -1,0 +1,23 @@
+# Dependencias
+node_modules/
+
+# Scripts de utilidad / one-shot (no van al repo)
+push_fase1_2/
+appwrite-functions/
+check_db.js
+check_schema.js
+git_remote_log.txt
+delete-user-*.tar.gz
+delete-user-*.zip
+e1_db.py
+fix_time.js
+fix_time.py
+
+# Archivos locales sensibles
+.env
+.env.local
+*.local
+
+# Build output
+dist/
+.vercel/
