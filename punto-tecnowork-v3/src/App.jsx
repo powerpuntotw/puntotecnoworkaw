@@ -18,6 +18,7 @@ import { LocalOrders } from './components/dashboards/LocalOrders';
 import { LocalCustomers } from './components/dashboards/LocalCustomers';
 import { LocalPrices } from './components/dashboards/LocalPrices';
 import { LocalRedeems } from './components/dashboards/LocalRedeems';
+import { LocalRewards } from './components/dashboards/LocalRewards';
 import { ClientHistory } from './components/dashboards/ClientHistory';
 import { UserProfile } from './components/dashboards/UserProfile';
 import { Landing } from './pages/Landing';
@@ -66,6 +67,7 @@ function App() {
                         <Route path="/local/customers" element={<LocalCustomers locationId={dbUser?.location_id} />} />
                         <Route path="/local/prices" element={<LocalPrices locationId={dbUser?.location_id} />} />
                         <Route path="/local/redeems" element={<LocalRedeems locationId={dbUser?.location_id} />} />
+                        <Route path="/local/rewards" element={<LocalRewards locationId={dbUser?.location_id} />} />
 
                         {/* Cliente / Común */}
                         <Route path="/history" element={<ClientHistory />} />
