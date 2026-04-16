@@ -46,7 +46,6 @@ export const AdminRewards = () => {
 
     useEffect(() => { fetchRewards(); }, []);
 
-    // Obtener URL pública de imagen desde Appwrite Storage
     const getImageUrl = (imageId) => {
         if (!imageId) return '';
         try {
@@ -56,7 +55,6 @@ export const AdminRewards = () => {
         }
     };
 
-    // Al seleccionar archivo: generar preview local
     const handleFileChange = (e) => {
         const file = e.target.files?.[0];
         if (!file) return;
@@ -72,27 +70,22 @@ export const AdminRewards = () => {
         setImagePreview(URL.createObjectURL(file));
     };
 
-    // Limpiar imagen seleccionada (no borra de Appwrite todavía — solo cancela la selección)
     const clearSelectedImage = () => {
         setImageFile(null);
         setImagePreview('');
         if (fileInputRef.current) fileInputRef.current.value = '';
     };
 
-    // Eliminar imagen ya guardada en Appwrite
     const handleRemoveExistingImage = async () => {
         if (!formData.image_id) return;
         try {
             await storage.deleteFile(STORAGE_BUCKETS.REWARDS, formData.image_id);
-        } catch {
-            // Si falla el borrado en storage igual limpiamos la referencia
-        }
+        } catch { }
         setFormData(prev => ({ ...prev, image_id: '' }));
         clearSelectedImage();
         toast.success('Imagen eliminada');
     };
 
-    // Abrir modal: cargar datos del reward existente o reset para nuevo
     const openModal = (reward = null) => {
         if (reward) {
             setFormData(reward);
@@ -117,11 +110,9 @@ export const AdminRewards = () => {
             const dbId = import.meta.env.VITE_APPWRITE_DATABASE_ID;
             let finalImageId = formData.image_id;
 
-            // Si hay un archivo nuevo, subirlo a Appwrite Storage
             if (imageFile) {
                 setIsUploadingImage(true);
                 try {
-                    // Si ya había imagen anterior, eliminarla antes de subir la nueva
                     if (formData.image_id) {
                         try { await storage.deleteFile(STORAGE_BUCKETS.REWARDS, formData.image_id); } catch { }
                     }
@@ -136,12 +127,15 @@ export const AdminRewards = () => {
                 }
             }
 
+            const pts = parseInt(formData.points_required);
+
             const payload = {
                 name:            formData.name,
                 title:           formData.name,
                 category:        formData.category,
                 description:     formData.description,
-                points_required: parseInt(formData.points_required),
+                points_required: pts,
+                points_cost:     pts,   // campo requerido por el esquema DB
                 stock:           parseInt(formData.stock),
                 is_visible:      formData.is_visible,
                 image_id:        finalImageId,
@@ -168,7 +162,6 @@ export const AdminRewards = () => {
     const handleDelete = async (reward) => {
         if (!window.confirm('¿Eliminar este premio permanentemente?')) return;
         try {
-            // Eliminar imagen del storage si existe
             if (reward.image_id) {
                 try { await storage.deleteFile(STORAGE_BUCKETS.REWARDS, reward.image_id); } catch { }
             }
@@ -180,7 +173,6 @@ export const AdminRewards = () => {
         }
     };
 
-    // Imagen actual a mostrar en el modal (preview nuevo o URL del existente)
     const modalImageSrc = imagePreview || (formData.image_id ? getImageUrl(formData.image_id) : '');
 
     return (
@@ -211,7 +203,6 @@ export const AdminRewards = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {rewards.map(reward => (
                         <div key={reward.$id} className="bg-card/50 backdrop-blur-xl border border-white/10 rounded-2xl p-5 shadow-glow group hover:border-primary/30 transition">
-                            {/* Imagen */}
                             <div className="relative aspect-square rounded-xl bg-white/5 overflow-hidden mb-4 flex items-center justify-center">
                                 {reward.image_id ? (
                                     <img
@@ -253,7 +244,6 @@ export const AdminRewards = () => {
                 </div>
             )}
 
-            {/* ── Modal Creación / Edición ── */}
             {isModalOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
                     <div style={{ backgroundColor: '#0a0a0f' }} className="border border-white/10 w-full max-w-lg rounded-[2.5rem] p-8 shadow-2xl max-h-[90vh] overflow-y-auto">
@@ -273,23 +263,20 @@ export const AdminRewards = () => {
 
                         <form onSubmit={handleSave} className="space-y-5">
 
-                            {/* ── Uploader de imagen ── */}
+                            {/* Uploader de imagen */}
                             <div>
                                 <label className="text-[10px] text-gray-500 font-black uppercase tracking-widest block mb-2">
                                     Imagen del Premio <span className="text-gray-600 font-normal normal-case">(opcional · JPG, PNG, WEBP · máx 5 MB)</span>
                                 </label>
 
                                 {modalImageSrc ? (
-                                    /* Preview de imagen (nueva o existente) */
                                     <div className="relative rounded-2xl overflow-hidden aspect-video bg-white/5 border border-white/10">
                                         <img src={modalImageSrc} alt="Preview" className="w-full h-full object-cover" />
                                         <div className="absolute inset-0 bg-black/40 opacity-0 hover:opacity-100 transition flex items-center justify-center gap-3">
-                                            {/* Cambiar imagen */}
                                             <button type="button" onClick={() => fileInputRef.current?.click()}
                                                 className="flex items-center gap-1.5 px-4 py-2 bg-primary rounded-xl text-white text-xs font-black uppercase shadow-glow">
                                                 <Upload size={14} /> Cambiar
                                             </button>
-                                            {/* Eliminar imagen */}
                                             <button type="button"
                                                 onClick={imageFile ? clearSelectedImage : handleRemoveExistingImage}
                                                 className="flex items-center gap-1.5 px-4 py-2 bg-red-500/80 rounded-xl text-white text-xs font-black uppercase">
@@ -303,7 +290,6 @@ export const AdminRewards = () => {
                                         )}
                                     </div>
                                 ) : (
-                                    /* Zona de carga vacía */
                                     <button type="button" onClick={() => fileInputRef.current?.click()}
                                         className="w-full aspect-video rounded-2xl border-2 border-dashed border-white/15 hover:border-primary/50 bg-white/3 hover:bg-primary/5 transition flex flex-col items-center justify-center gap-3 text-gray-500 hover:text-primary">
                                         <div className="w-14 h-14 rounded-2xl bg-white/5 flex items-center justify-center">
@@ -316,7 +302,6 @@ export const AdminRewards = () => {
                                     </button>
                                 )}
 
-                                {/* Input file oculto */}
                                 <input
                                     ref={fileInputRef}
                                     type="file"
@@ -326,7 +311,6 @@ export const AdminRewards = () => {
                                 />
                             </div>
 
-                            {/* ── Campos del formulario ── */}
                             <div>
                                 <label className="text-[10px] text-gray-500 font-black uppercase tracking-widest block mb-2">Nombre *</label>
                                 <input type="text" required value={formData.name}
@@ -371,7 +355,6 @@ export const AdminRewards = () => {
                                     style={{ backgroundColor: '#1a1a1a', color: '#fff', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '16px', padding: '14px 18px', width: '100%', fontSize: '14px', fontWeight: '600', outline: 'none', resize: 'none', boxSizing: 'border-box' }} />
                             </div>
 
-                            {/* Botones */}
                             <div className="flex gap-3 pt-2">
                                 <button type="button" onClick={closeModal}
                                     className="flex-1 py-3 rounded-2xl font-black uppercase text-sm transition"
