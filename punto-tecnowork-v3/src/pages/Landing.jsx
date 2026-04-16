@@ -100,7 +100,7 @@ export const Landing = () => {
 
             {/* Gamification Section */}
             <section id="niveles" className="py-24 border-t border-white/5 bg-background relative overflow-hidden">
-                <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 brightness-100 contrast-150 mix-blend-overlay"></div>
+                <div className="absolute inset-0 opacity-20 contrast-150 mix-blend-overlay" style={{backgroundImage:"url(\"data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")"}}></div>
                 <div className="max-w-7xl mx-auto px-6 text-center relative z-10">
                     <h2 className="text-4xl font-bold text-white mb-4">Sube de Nivel, Gana Premios</h2>
                     <p className="text-gray-400 max-w-2xl mx-auto mb-16 text-lg">El primer ecosistema de impresión gamificado. El 10% de lo que gastas vuelve en puntos a tu billetera virtual.</p>

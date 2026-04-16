@@ -11,5 +11,18 @@ export default defineConfig({
     alias: {
       '@': '/src'
     }
+  },
+  build: {
+    sourcemap: true,
+    chunkSizeWarningLimit: 600,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-react':   ['react', 'react-dom', 'react-router-dom'],
+          'vendor-appwrite': ['appwrite'],
+          'vendor-ui':      ['lucide-react', 'react-hot-toast'],
+        }
+      }
+    }
   }
 })
