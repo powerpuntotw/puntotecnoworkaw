@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
-import { databases, storage } from '../../lib/appwrite';
-import { Query, ID } from 'appwrite';
+import { storage } from '../../lib/appwrite';
 import { STORAGE_BUCKETS } from '../../lib/constants';
 import toast from 'react-hot-toast';
+import { RewardService } from '../../services/RewardService';
 import {
     Gift, Loader2, Image as ImageIcon, CheckCircle,
     Clock, Scan, Star, Printer, Package,
@@ -81,14 +81,13 @@ export const LocalRewards = ({ locationId }) => {
         if (!locationId) return;
         try {
             setLoadingRedeems(true);
-            const res = await databases.listDocuments(
-                import.meta.env.VITE_APPWRITE_DATABASE_ID,
-                'redeems',
-                [Query.equal('location_id', locationId), Query.orderDesc('$createdAt'), Query.limit(100)]
-            );
-            setRedeems(res.documents);
-        } catch (e) { console.error(e); }
-        finally { setLoadingRedeems(false); }
+            const docs = await RewardService.listRedeems({ locationId });
+            setRedeems(docs);
+        } catch (e) {
+            console.error('Error fetching redeems:', e);
+        } finally {
+            setLoadingRedeems(false);
+        }
     };
 
     useEffect(() => {
@@ -110,19 +109,18 @@ export const LocalRewards = ({ locationId }) => {
     const handleDeliver = async (redeemId) => {
         try {
             setDelivering(redeemId);
-            await databases.updateDocument(
-                import.meta.env.VITE_APPWRITE_DATABASE_ID,
-                'redeems', redeemId,
-                { status: 'entregado', delivered_at: new Date().toISOString() }
-            );
+            const updated = await RewardService.deliverReward(redeemId);
+            
             setRedeems(prev => prev.map(r =>
-                r.$id === redeemId
-                    ? { ...r, status: 'entregado', delivered_at: new Date().toISOString() }
-                    : r
+                r.$id === redeemId ? updated : r
             ));
             toast.success('Premio entregado correctamente');
-        } catch { toast.error('Error al procesar la entrega'); }
-        finally { setDelivering(null); }
+        } catch (e) {
+            console.error('Deliver error:', e);
+            toast.error('Error al procesar la entrega');
+        } finally {
+            setDelivering(null);
+        }
     };
 
     // ── Abrir modal de confirmación activación PrintPass™ ──
@@ -139,51 +137,25 @@ export const LocalRewards = ({ locationId }) => {
 
         try {
             setActivating(true);
-            const dbId = import.meta.env.VITE_APPWRITE_DATABASE_ID;
-            const now = new Date();
-            const validityDays = reward.pack_validity_days ?? 30;
-            const expiresAt = new Date(now.getTime() + validityDays * 24 * 60 * 60 * 1000);
-
-            // 1. Crear documento en print_packs
-            await databases.createDocument(dbId, 'print_packs', ID.unique(), {
-                client_id:          activatingRedeem.client_id,
-                client_name:        activatingRedeem.client_name,
-                reward_id:          reward.$id,
-                reward_name:        reward.name,
-                location_id:        locationId,
-                location_name:      '', // se puede enriquecer si se tiene el nombre
-                bw_a4_total:        reward.pack_bw_a4 ?? 0,
-                bw_a4_remaining:    reward.pack_bw_a4 ?? 0,
-                color_a4_total:     reward.pack_color_a4 ?? 0,
-                color_a4_remaining: reward.pack_color_a4 ?? 0,
-                foto_total:         reward.pack_foto_10x15 ?? 0,
-                foto_remaining:     reward.pack_foto_10x15 ?? 0,
-                bw_a3_total:        reward.pack_bw_a3 ?? 0,
-                bw_a3_remaining:    reward.pack_bw_a3 ?? 0,
-                activated_at:       now.toISOString(),
-                expires_at:         expiresAt.toISOString(),
-                status:             'activo',
-            });
-
-            // 2. Marcar redeem como entregado
-            await databases.updateDocument(dbId, 'redeems', activatingRedeem.$id, {
-                status: 'entregado',
-                delivered_at: now.toISOString(),
+            const updatedRedeem = await RewardService.activatePrintPass({
+                redeem: activatingRedeem,
+                reward,
+                locationId
             });
 
             setRedeems(prev => prev.map(r =>
-                r.$id === activatingRedeem.$id
-                    ? { ...r, status: 'entregado', delivered_at: now.toISOString() }
-                    : r
+                r.$id === activatingRedeem.$id ? updatedRedeem : r
             ));
 
-            toast.success(`PrintPass™ activado para ${activatingRedeem.client_name} · Vence ${expiresAt.toLocaleDateString('es-AR')}`);
+            toast.success(`PrintPass™ activado para ${activatingRedeem.client_name}`);
             setShowActivateModal(false);
             setActivatingRedeem(null);
         } catch (e) {
-            console.error(e);
+            console.error('Activation error:', e);
             toast.error('Error al activar el PrintPass™');
-        } finally { setActivating(false); }
+        } finally {
+            setActivating(false);
+        }
     };
 
     // ── Filtros ──

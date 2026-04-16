@@ -7,11 +7,13 @@ import {
     ChevronDown, ChevronUp, AlertCircle, X, Clock,
     CheckCircle2, Ban, Package
 } from 'lucide-react';
+import { AccessService } from '../../services/AccessService';
 
 // ─── Helpers ────────────────────────────────────────────────
 const roleStyle = (t) => {
-    if (t === 'admin') return 'bg-purple-500/20 text-purple-300 border-purple-500/30';
-    if (t === 'local') return 'bg-blue-500/20 text-blue-300 border-blue-500/30';
+    const userObj = { user_type: t };
+    if (AccessService.isAdmin(userObj)) return 'bg-purple-500/20 text-purple-300 border-purple-500/30';
+    if (AccessService.isLocal(userObj)) return 'bg-blue-500/20 text-blue-300 border-blue-500/30';
     return 'bg-gray-500/20 text-gray-300 border-gray-500/30';
 };
 
@@ -37,9 +39,12 @@ const daysLeft = (expiresAt) => {
     return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
 };
 
-const RoleIcon = ({ t }) =>
-    t === 'admin' ? <Shield size={10} /> :
-    t === 'local' ? <Store size={10} />  : <User size={10} />;
+const RoleIcon = ({ t }) => {
+    const userObj = { user_type: t };
+    if (AccessService.isAdmin(userObj)) return <Shield size={10} />;
+    if (AccessService.isLocal(userObj)) return <Store size={10} />;
+    return <User size={10} />;
+};
 
 // ─── Sub-componente: sección PrintPass de un usuario ────────
 const UserPrintPacks = ({ userId, userName }) => {
@@ -422,7 +427,7 @@ export const AdminUsers = () => {
                                         </button>
                                     </div>
                                     {/* PrintPass™ por usuario (mobile) */}
-                                    {ppEnabled && u.user_type !== 'admin' && (
+                                    {ppEnabled && !AccessService.isAdmin(u) && (
                                         <UserPrintPacks userId={u.$id} userName={u.full_name || u.email} />
                                     )}
                                 </div>
@@ -490,7 +495,7 @@ export const AdminUsers = () => {
                                             {/* Columna PrintPass™ */}
                                             {ppEnabled && (
                                                 <td className="py-4 px-4 text-center">
-                                                    {u.user_type !== 'admin' ? (
+                                                    {!AccessService.isAdmin(u) ? (
                                                         <UserPrintPacks
                                                             userId={u.$id}
                                                             userName={u.full_name || u.email}

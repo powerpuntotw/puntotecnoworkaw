@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { databases, client } from '../lib/appwrite';
-import { Query, ID } from 'appwrite';
+import { TicketService } from '../services/TicketService';
+import { ID } from 'appwrite';
 import toast from 'react-hot-toast';
 import { MessageSquare, Send, Loader2, AlertCircle, Plus, CheckCircle, X, ClipboardList, FileText } from 'lucide-react';
 
@@ -74,20 +75,8 @@ export const TicketsSystem = () => {
     const fetchTickets = async () => {
         try {
             setLoading(true);
-            const queries = [Query.orderDesc('$createdAt')];
-            if (!isAdmin) {
-                const userOrs = [
-                    Query.equal('client_id', user.$id),
-                    Query.equal('recipient_id', user.$id)
-                ];
-                if (dbUser?.user_type === 'local' && dbUser?.location_id) {
-                    userOrs.push(Query.equal('recipient_id', dbUser.location_id));
-                    userOrs.push(Query.equal('client_id', dbUser.location_id));
-                }
-                queries.push(Query.or(userOrs));
-            }
-            const res = await databases.listDocuments(import.meta.env.VITE_APPWRITE_DATABASE_ID, 'tickets', queries);
-            setTickets(res.documents);
+            const docs = await TicketService.getVisibleTickets(user, dbUser);
+            setTickets(docs);
         } catch (err) { console.error(err); }
         finally { setLoading(false); }
     };
@@ -97,17 +86,8 @@ export const TicketsSystem = () => {
         if (showCreateModal && recipientRole && recipientRole !== 'admin') {
             const fetchUsersList = async () => {
                 try {
-                    const dbId = import.meta.env.VITE_APPWRITE_DATABASE_ID;
-                    if (recipientRole === 'local') {
-                        const res = await databases.listDocuments(dbId, 'printing_locations', [Query.limit(100)]);
-                        setUsersList(res.documents);
-                    } else {
-                        const res = await databases.listDocuments(dbId, 'users', [
-                            Query.equal('user_type', recipientRole),
-                            Query.limit(100)
-                        ]);
-                        setUsersList(res.documents);
-                    }
+                    const docs = await TicketService.getPotentialRecipients(recipientRole);
+                    setUsersList(docs);
                 } catch (e) { console.error(e); }
             };
             fetchUsersList();
@@ -132,13 +112,20 @@ export const TicketsSystem = () => {
             `databases.${import.meta.env.VITE_APPWRITE_DATABASE_ID}.collections.tickets.documents`,
             response => {
                 if (response.events.some(e => e.includes('.create'))) {
+                    console.log('[Realtime:TicketsSystem] Nuevo ticket recibido:', response.payload.subject);
                     setTickets(prev => [response.payload, ...prev]);
+                    
                     if (isAdmin) {
+                        console.log('[Realtime:TicketsSystem] Disparando notificación local para Admin');
                         playNotificationSound();
-                        toast.success('Nuevo ticket recibido', { icon: '🎫', style: { background: '#1a1a1a', color: '#fff', borderRadius: '15px' } });
+                        toast.success('Nuevo ticket recibido', { 
+                            icon: '🎫', 
+                            style: { background: '#1a1a1a', color: '#fff', borderRadius: '15px' } 
+                        });
                     }
                 }
                 if (response.events.some(e => e.includes('.update'))) {
+                    console.log('[Realtime:TicketsSystem] Ticket actualizado:', response.payload.$id);
                     setTickets(prev => prev.map(t => t.$id === response.payload.$id ? response.payload : t));
                     setActiveTicket(prev => prev?.$id === response.payload.$id ? response.payload : prev);
                 }
@@ -151,17 +138,20 @@ export const TicketsSystem = () => {
         setActiveTicket(ticket);
         if (unsubMessagesRef.current) unsubMessagesRef.current();
         try {
+            const docs = await TicketService.getMessages(ticket.$id);
+            setMessages(docs);
             const dbId = import.meta.env.VITE_APPWRITE_DATABASE_ID;
-            const res = await databases.listDocuments(dbId, 'messages', [
-                Query.equal('ticket_id', ticket.$id), Query.orderAsc('$createdAt')
-            ]);
-            setMessages(res.documents);
             unsubMessagesRef.current = client.subscribe(
                 `databases.${dbId}.collections.messages.documents`,
                 response => {
                     if (response.payload.ticket_id === ticket.$id) {
+                        console.log('[Realtime:TicketsSystem] Nuevo mensaje en ticket activo');
                         setMessages(prev => prev.find(m => m.$id === response.payload.$id) ? prev : [...prev, response.payload]);
-                        if (response.payload.sender_id !== user.$id) playNotificationSound();
+                        
+                        if (response.payload.sender_id !== user.$id) {
+                            console.log('[Realtime:TicketsSystem] Sonando notificación de mensaje');
+                            playNotificationSound();
+                        }
                     }
                 }
             );
@@ -173,18 +163,14 @@ export const TicketsSystem = () => {
         if (!newMessage.trim() || !activeTicket || activeTicket.status === 'closed') return;
         try {
             setSending(true);
-            const dbId = import.meta.env.VITE_APPWRITE_DATABASE_ID;
-            await databases.createDocument(dbId, 'messages', ID.unique(), {
-                ticket_id: activeTicket.$id,
-                sender_id: user.$id,
-                sender_name: dbUser?.full_name || user.name,
+            await TicketService.sendMessage({
+                ticketId: activeTicket.$id,
+                user,
+                dbUser,
                 content: newMessage,
-                role: myRole
+                updateStatusToAnswered: isAdmin && activeTicket.status === 'open'
             });
             setNewMessage('');
-            if (isAdmin && activeTicket.status === 'open') {
-                await databases.updateDocument(dbId, 'tickets', activeTicket.$id, { status: 'answered' });
-            }
         } catch { toast.error('Error al enviar mensaje'); }
         finally { setSending(false); }
     };
@@ -198,29 +184,19 @@ export const TicketsSystem = () => {
         }
         const recipientUser = usersList.find(u => u.$id === recipientId);
         const rName = recipientRole === 'admin' ? 'Administración' : (recipientUser?.name || recipientUser?.full_name || 'Destinatario');
-        const cRole = dbUser?.user_type || 'client';
+        
         try {
             setCreating(true);
-            const dbId = import.meta.env.VITE_APPWRITE_DATABASE_ID;
-            const ticket = await databases.createDocument(dbId, 'tickets', ID.unique(), {
-                client_id: user.$id,
-                client_name: dbUser?.full_name || user.name,
-                subject: newSubject.trim(),
-                status: 'open',
-                creator_role: cRole,
-                recipient_role: recipientRole,
-                recipient_id: recipientRole === 'admin' ? 'global' : recipientId,
-                recipient_name: rName
+            const ticket = await TicketService.createTicket({
+                user,
+                dbUser,
+                subject: newSubject,
+                recipientRole,
+                recipientId,
+                recipientName: rName,
+                description: newDescription
             });
-            if (newDescription.trim()) {
-                await databases.createDocument(dbId, 'messages', ID.unique(), {
-                    ticket_id: ticket.$id,
-                    sender_id: user.$id,
-                    sender_name: dbUser?.full_name || user.name,
-                    content: newDescription.trim(),
-                    role: cRole
-                });
-            }
+            
             toast.success('Ticket abierto');
             setShowCreateModal(false);
             setNewSubject('');
@@ -244,18 +220,13 @@ export const TicketsSystem = () => {
         }
         try {
             setClosing(true);
-            const dbId = import.meta.env.VITE_APPWRITE_DATABASE_ID;
-            const closerName = dbUser?.full_name || user?.name || 'Usuario';
-            const closerRoleLabel = roleLabel(myRole);
-            // Mensaje de cierre con quién lo cerró y su rol
-            await databases.createDocument(dbId, 'messages', ID.unique(), {
-                ticket_id: closingTicket.$id,
-                sender_id: user.$id,
-                sender_name: `${closerName} (${closerRoleLabel})`,
-                content: `✅ Ticket cerrado por ${closerName} (${closerRoleLabel}): ${resolution.trim()}`,
-                role: myRole
+            await TicketService.closeTicket({
+                ticketId: closingTicket.$id,
+                user,
+                dbUser,
+                resolution,
+                closerRoleLabel: roleLabel(myRole)
             });
-            await databases.updateDocument(dbId, 'tickets', closingTicket.$id, { status: 'closed' });
             toast.success('Ticket cerrado con justificación registrada');
             setShowCloseModal(false);
             setResolution('');

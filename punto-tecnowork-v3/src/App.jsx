@@ -27,6 +27,7 @@ import { RewardsCatalog } from './pages/RewardsCatalog';
 import { TicketsSystem } from './pages/TicketsSystem';
 import { CompleteProfile } from './pages/CompleteProfile';
 import { Toaster } from 'react-hot-toast';
+import { RoleProtectedRoute } from './components/RoleProtectedRoute';
 
 function App() {
     const { dbUser } = useAuth();
@@ -50,26 +51,30 @@ function App() {
                         <Route path="/orders/new" element={<NewOrderFlow />} />
                         <Route path="/rewards" element={<RewardsCatalog />} />
 
-                        {/* Administrador */}
-                        <Route path="/admin/overview" element={<AdminDashboard />} />
-                        <Route path="/admin/locations" element={<AdminLocations />} />
-                        <Route path="/admin/users" element={<AdminUsers />} />
-                        <Route path="/admin/orders" element={<AdminOrders />} />
-                        <Route path="/admin/rewards" element={<AdminRewards />} />
-                        <Route path="/admin/reports" element={<AdminReports />} />
-                        <Route path="/admin/maintenance" element={<AdminMaintenance />} />
-                        <Route path="/admin/branding" element={<AdminBranding />} />
-                        <Route path="/admin/audit" element={<AdminAudit />} />
+                        {/* Administrador: Acceso exclusivo para rol admin */}
+                        <Route element={<RoleProtectedRoute allowedRoles={['admin']} />}>
+                            <Route path="/admin/overview" element={<AdminDashboard />} />
+                            <Route path="/admin/locations" element={<AdminLocations />} />
+                            <Route path="/admin/users" element={<AdminUsers />} />
+                            <Route path="/admin/orders" element={<AdminOrders />} />
+                            <Route path="/admin/rewards" element={<AdminRewards />} />
+                            <Route path="/admin/reports" element={<AdminReports />} />
+                            <Route path="/admin/maintenance" element={<AdminMaintenance />} />
+                            <Route path="/admin/branding" element={<AdminBranding />} />
+                            <Route path="/admin/audit" element={<AdminAudit />} />
+                        </Route>
 
-                        {/* Local */}
-                        <Route path="/local/overview" element={<LocalDashboard locationId={dbUser?.location_id} />} />
-                        <Route path="/local/orders" element={<LocalOrders locationId={dbUser?.location_id} />} />
-                        <Route path="/local/customers" element={<LocalCustomers locationId={dbUser?.location_id} />} />
-                        <Route path="/local/prices" element={<LocalPrices locationId={dbUser?.location_id} />} />
-                        <Route path="/local/redeems" element={<LocalRedeems locationId={dbUser?.location_id} />} />
-                        <Route path="/local/rewards" element={<LocalRewards locationId={dbUser?.location_id} />} />
+                        {/* Local: Acceso para operadores y administradores (supervisión) */}
+                        <Route element={<RoleProtectedRoute allowedRoles={['local', 'admin']} />}>
+                            <Route path="/local/overview" element={<LocalDashboard locationId={dbUser?.location_id} />} />
+                            <Route path="/local/orders" element={<LocalOrders locationId={dbUser?.location_id} />} />
+                            <Route path="/local/customers" element={<LocalCustomers locationId={dbUser?.location_id} />} />
+                            <Route path="/local/prices" element={<LocalPrices locationId={dbUser?.location_id} />} />
+                            <Route path="/local/redeems" element={<LocalRedeems locationId={dbUser?.location_id} />} />
+                            <Route path="/local/rewards" element={<LocalRewards locationId={dbUser?.location_id} />} />
+                        </Route>
 
-                        {/* Cliente / Común */}
+                        {/* Cliente / Común: Acceso para cualquier usuario autenticado bajo ProtectedRoute */}
                         <Route path="/history" element={<ClientHistory />} />
                         <Route path="/profile" element={<UserProfile />} />
                         <Route path="/tickets" element={<TicketsSystem />} />

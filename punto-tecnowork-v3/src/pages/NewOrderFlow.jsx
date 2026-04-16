@@ -11,25 +11,11 @@ import { databases, storage } from '../lib/appwrite';
 import { ID, Query } from 'appwrite';
 import { useNavigate } from 'react-router';
 
-const isOnline = (lastActiveAt) => {
-    if (!lastActiveAt) return false;
-    return (Math.floor(Date.now() / 1000) - lastActiveAt) < 300;
-};
-const timeAgo = (lastActiveAt) => {
-    if (!lastActiveAt) return 'sin conexión';
-    const diff = Math.floor(Date.now() / 1000) - lastActiveAt;
-    if (diff < 60) return `hace ${diff}s`;
-    if (diff < 3600) return `hace ${Math.floor(diff / 60)}min`;
-    return `hace ${Math.floor(diff / 3600)}h`;
-};
-const genOrderNumber = () => 'PT' + Date.now().toString(36).toUpperCase();
+import { PriceService } from '../services/PriceService';
+import { OrderService } from '../services/OrderService';
+import { BranchService } from '../services/BranchService';
 
-// Mapeo de color_mode a campo del pack
-const COLOR_TO_PACK = {
-    bw:    'bw_a4_remaining',
-    color: 'color_a4_remaining',
-    foto:  'foto_remaining',
-};
+// El mapeo de campos de pack ahora se centraliza en PriceService y OrderService
 
 export const NewOrderFlow = () => {
     const { user, dbUser } = useAuth();
@@ -153,11 +139,23 @@ export const NewOrderFlow = () => {
         if (!field || (selectedPack[field] ?? 0) === 0) setUsePack(false);
     }, [colorMode]);
 
-    const activePrices = useMemo(() => {
-        const p = { ...globalPrices };
-        Object.keys(localPrices).forEach(k => { if (localPrices[k] > 0) p[k] = localPrices[k]; });
-        return p;
-    }, [globalPrices, localPrices]);
+    const pricing = useMemo(() => PriceService.calculateOrder({
+        fileCount: files.length,
+        copies,
+        colorMode,
+        globalPrices,
+        localPrices,
+        selectedPack,
+        usePack
+    }), [files.length, copies, colorMode, globalPrices, localPrices, selectedPack, usePack]);
+
+    const { 
+        unitPrice, totalUnits, packUnitsUsed, 
+        paidUnits, estimatedPrice, pointsToEarn, packField 
+    } = pricing;
+
+    // Pack tiene saldo para el tipo de impresión elegido (basado en el cálculo del servicio)
+    const packHasSaldo = selectedPack && packField && (selectedPack[packField] ?? 0) > 0;
 
     const onDrop = useCallback(acceptedFiles => {
         setFiles(prev => {
@@ -176,26 +174,6 @@ export const NewOrderFlow = () => {
         maxSize: 20 * 1024 * 1024
     });
 
-    const getUnitPrice = () => {
-        if (colorMode === 'bw')    return activePrices.a4_bn || 50;
-        if (colorMode === 'color') return activePrices.a4_color || 150;
-        if (colorMode === 'foto')  return activePrices.foto_10x15 || 300;
-        return 0;
-    };
-
-    // ── Cálculo con lógica PrintPass™ ──
-    const totalUnits = files.length * copies;  // unidades totales pedidas
-    const packField  = COLOR_TO_PACK[colorMode];
-    const packSaldo  = (usePack && selectedPack && packField) ? (selectedPack[packField] ?? 0) : 0;
-    const packUnitsUsed  = usePack ? Math.min(packSaldo, totalUnits) : 0;
-    const paidUnits      = totalUnits - packUnitsUsed;
-    const unitPrice      = getUnitPrice();
-    const estimatedPrice = paidUnits * unitPrice;
-    const pointsToEarn   = usePack ? 0 : Math.floor(estimatedPrice * 0.10);
-
-    // Pack tiene saldo para el tipo de impresión elegido
-    const packHasSaldo = selectedPack && packField && (selectedPack[packField] ?? 0) > 0;
-
     // ── Submit ──
     const handleSubmit = async () => {
         if (files.length === 0) return toast.error('Agregá al menos un archivo');
@@ -205,8 +183,6 @@ export const NewOrderFlow = () => {
         setIsSubmitting(true);
         const toastId = toast.loading('Procesando orden...');
         try {
-            const dbId = import.meta.env.VITE_APPWRITE_DATABASE_ID;
-
             // 1. Subir archivos
             const fileIds = [];
             for (const file of files) {
@@ -214,36 +190,34 @@ export const NewOrderFlow = () => {
                 fileIds.push(uploaded.$id);
             }
 
-            // 2. Crear orden
-            await databases.createDocument(dbId, 'orders', ID.unique(), {
-                client_id:      user.$id,
-                client_name:    dbUser?.full_name || user.name || 'Cliente',
-                location_id:    selectedLocation.$id,
-                location_name:  selectedLocation.name,
-                unit_price:     unitPrice,
-                total_price:    estimatedPrice,
-                copies,
-                status:         'pendiente',
-                files:          fileIds,
-                color_mode:     colorMode,
-                points_earned:  pointsToEarn,
-                order_number:   genOrderNumber(),
-                // PrintPass™
-                pack_id:        usePack && selectedPack ? selectedPack.$id : null,
-                pack_units_used: packUnitsUsed,
-                paid_units:     paidUnits,
+            // 2. Procesar Orden vía Servicio (Centraliza creación de orden y descuento de pack)
+            await OrderService.createOrder({
+                client: {
+                    id:   user.$id,
+                    name: dbUser?.full_name || user.name || 'Cliente'
+                },
+                location: {
+                    id:   selectedLocation.$id,
+                    name: selectedLocation.name
+                },
+                fileIds,
+                details: {
+                    colorMode,
+                    copies
+                },
+                pricing: {
+                    unitPrice,
+                    totalPrice: estimatedPrice,
+                    pointsEarned: pointsToEarn
+                },
+                packInfo: {
+                    usePack,
+                    selectedPack,
+                    packUnitsUsed,
+                    packField,
+                    paidUnits
+                }
             });
-
-            // 3. Si usó pack: descontar saldo del print_pack
-            if (usePack && selectedPack && packUnitsUsed > 0 && packField) {
-                const newRemaining = (selectedPack[packField] ?? 0) - packUnitsUsed;
-                const updatePayload = { [packField]: Math.max(0, newRemaining) };
-                // Si todos los saldos llegan a 0 → agotado
-                const otherFields = Object.values(COLOR_TO_PACK).filter(f => f !== packField);
-                const allZero = otherFields.every(f => (selectedPack[f] ?? 0) === 0) && newRemaining <= 0;
-                if (allZero) updatePayload.status = 'agotado';
-                await databases.updateDocument(dbId, 'print_packs', selectedPack.$id, updatePayload);
-            }
 
             toast.success('¡Orden enviada con éxito!', { id: toastId });
             setTimeout(() => navigate('/dashboard'), 1500);
@@ -260,8 +234,8 @@ export const NewOrderFlow = () => {
     );
 
     const LocationCard = ({ loc, selected, onSelect }) => {
-        const online = isOnline(loc.last_active_at);
-        const lastSeen = timeAgo(loc.last_active_at);
+        const online = BranchService.isOperatorOnline(loc.last_active_at);
+        const lastSeen = BranchService.formatLastSeen(loc.last_active_at);
         const hasPP = ppEnabledLocs.includes(loc.$id);
         return (
             <div onClick={() => onSelect(loc)}

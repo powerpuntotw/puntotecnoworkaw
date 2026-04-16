@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { databases, storage } from '../lib/appwrite';
-import { Query, ID } from 'appwrite';
+import { storage } from '../lib/appwrite';
 import { STORAGE_BUCKETS } from '../lib/constants';
 import toast from 'react-hot-toast';
+import { RewardService } from '../services/RewardService';
 import {
     Gift, Star, ArrowRight, Loader2, Info, CheckCircle,
     MapPin, Printer, Clock, ShieldCheck, AlertCircle,
@@ -49,40 +49,36 @@ export const RewardsCatalog = () => {
 
     const fetchRewards = async () => {
         try {
-            const res = await databases.listDocuments(
-                import.meta.env.VITE_APPWRITE_DATABASE_ID, 'rewards',
-                [Query.equal('is_visible', true)]
-            );
-            setRewards(res.documents);
-        } catch (e) { console.error(e); }
-        finally { setLoading(false); }
+            const docs = await RewardService.getAvailableRewards();
+            setRewards(docs);
+        } catch (e) {
+            console.error('Error fetching rewards:', e);
+            toast.error('Error al cargar premios.');
+        } finally {
+            setLoading(false);
+        }
     };
 
     const fetchLocations = async () => {
         try {
-            const res = await databases.listDocuments(
-                import.meta.env.VITE_APPWRITE_DATABASE_ID, 'printing_locations',
-                [Query.equal('status', 'activo'), Query.limit(50)]
-            );
-            setLocations(res.documents);
-            if (res.documents.length > 0) setSelectedLocationId(res.documents[0].$id);
-        } catch (e) { console.error(e); }
+            const docs = await RewardService.getPrintingLocations();
+            setLocations(docs);
+            if (docs.length > 0) setSelectedLocationId(docs[0].$id);
+        } catch (e) {
+            console.error('Error fetching locations:', e);
+        }
     };
 
     const fetchPPConfig = async () => {
         try {
-            const res = await databases.listDocuments(
-                import.meta.env.VITE_APPWRITE_DATABASE_ID, 'system_config',
-                [Query.equal('type', 'printpass_config')]
-            );
-            if (res.documents.length > 0) {
-                const data = JSON.parse(res.documents[0].data);
-                if (data.enabled) {
-                    setPpEnabledLocs(data.enabled_locations ?? []);
-                    setPpPolicy(data.policy ?? '');
-                }
+            const config = await RewardService.getPrintPassConfig();
+            if (config && config.enabled) {
+                setPpEnabledLocs(config.enabled_locations ?? []);
+                setPpPolicy(config.policy ?? '');
             }
-        } catch { }
+        } catch (e) {
+            console.error('Error fetching PrintPass config:', e);
+        }
     };
 
     useEffect(() => { fetchRewards(); fetchLocations(); fetchPPConfig(); }, []);
@@ -110,50 +106,19 @@ export const RewardsCatalog = () => {
 
     const executeRedeem = async (reward) => {
         const cost = reward.points_required;
+        const locName = locations.find(l => l.$id === selectedLocationId)?.name ?? '';
+
+        if (!window.confirm(`¿Canjear "${reward.name}" por ${cost} puntos?\nRetiro en: ${locName}`)) return;
+
         try {
             setIsProcessing(reward.$id);
-            const dbId = import.meta.env.VITE_APPWRITE_DATABASE_ID;
 
-            // 1. Fetch saldo fresco para evitar race condition
-            const freshUser = await databases.getDocument(dbId, 'users', dbUser.$id);
-            const freshPoints = freshUser.points ?? 0;
-            if (freshPoints < cost) {
-                toast.error(`Saldo insuficiente. Tenés ${freshPoints} pts, necesitás ${cost} pts.`);
-                checkSession();
-                return;
-            }
-
-            const locName = locations.find(l => l.$id === selectedLocationId)?.name ?? '';
-            if (!window.confirm(`¿Canjear "${reward.name}" por ${cost} puntos?\nRetiro en: ${locName}`)) return;
-
-            const redeemCode = Math.random().toString(36).substring(2, 10).toUpperCase();
-
-            // 2. Crear redeem
-            await databases.createDocument(dbId, 'redeems', ID.unique(), {
-                client_id:   user.$id,
-                client_name: dbUser?.full_name || user.name,
-                reward_id:   reward.$id,
-                reward_name: reward.name,
-                points_cost: cost,
-                status:      'pendiente',
-                code:        redeemCode,
-                location_id: selectedLocationId,
-            });
-
-            // 3. Descontar puntos
-            await databases.updateDocument(dbId, 'users', dbUser.$id, { points: freshPoints - cost });
-
-            // 4. Decrementar stock
-            if (reward.stock > 0) {
-                await databases.updateDocument(dbId, 'rewards', reward.$id, { stock: reward.stock - 1 });
-            }
-
-            // 5. Log historial
-            await databases.createDocument(dbId, 'points_history', ID.unique(), {
-                client_id: user.$id,
-                type:      'minus',
-                amount:    cost,
-                reason:    `Canje: ${reward.name}`,
+            const { redeemCode } = await RewardService.redeemReward({
+                user,
+                dbUser,
+                reward,
+                locationId: selectedLocationId,
+                locationName: locName
             });
 
             toast.success(
@@ -162,11 +127,12 @@ export const RewardsCatalog = () => {
                     : `¡Canje exitoso! Código: ${redeemCode}`,
                 { duration: 7000 }
             );
+
             checkSession();
             fetchRewards();
         } catch (e) {
             console.error('Redeem error:', e);
-            toast.error('Error al procesar el canje.');
+            toast.error(e.message || 'Error al procesar el canje.');
         } finally {
             setIsProcessing(null);
         }

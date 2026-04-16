@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { databases, withRetry, ConnectionMonitor } from '../../lib/appwrite';
 import { Query } from 'appwrite';
-import { Loader2, Package, CheckCircle2, TrendingUp, DollarSign, Clock, Activity, Star, Wifi, WifiOff, AlertTriangle } from 'lucide-react';
+import { Loader2, Package, CheckCircle2, TrendingUp, DollarSign, Clock, Activity, Star, Wifi, WifiOff, AlertTriangle, Eye, EyeOff } from 'lucide-react';
+import { BranchService, HEARTBEAT_INTERVAL_MS } from '../../services/BranchService';
 
 export const LocalDashboard = ({ locationId }) => {
     const [loading, setLoading] = useState(true);
@@ -11,13 +12,14 @@ export const LocalDashboard = ({ locationId }) => {
         pending: 0, processing: 0, ready: 0, delivered: 0,
         weeklyRevenue: 0, totalPointsEarned: 0
     });
+    const [locationData, setLocationData] = useState(null);
     const heartbeatRef = useRef(null);
     // BLINDAJE: Estado de conexión del heartbeat
     const [hbStatus, setHbStatus] = useState('connecting'); // 'ok' | 'retrying' | 'offline' | 'connecting'
     const [lastHbTime, setLastHbTime] = useState(null);
     const hbFailCountRef = useRef(0);
     const MAX_BACKOFF_MS = 5 * 60 * 1000; // 5 min máximo
-    const BASE_INTERVAL_MS = 60_000;      // 60s éxito
+    const BASE_INTERVAL_MS = HEARTBEAT_INTERVAL_MS;
 
     useEffect(() => {
         if (!locationId) return;
@@ -30,17 +32,12 @@ export const LocalDashboard = ({ locationId }) => {
                 return;
             }
             try {
-                await withRetry(
-                    () => databases.updateDocument(
-                        import.meta.env.VITE_APPWRITE_DATABASE_ID,
-                        'printing_locations', locationId,
-                        { last_active_at: Math.floor(Date.now() / 1000) }
-                    ),
-                    { maxRetries: 2, baseDelayMs: 1000 }
-                );
+                await BranchService.sendHeartbeat(locationId);
                 hbFailCountRef.current = 0;
                 setHbStatus('ok');
                 setLastHbTime(new Date());
+                // Actualizar localmente para mantener el indicador de disponibilidad sincronizado
+                setLocationData(prev => prev ? { ...prev, last_active_at: Math.floor(Date.now() / 1000) } : null);
             } catch {
                 hbFailCountRef.current += 1;
                 setHbStatus('retrying');
@@ -100,6 +97,7 @@ export const LocalDashboard = ({ locationId }) => {
                 ]))
             ]);
             setLocationName(locRes.name);
+            setLocationData(locRes);
             const orders = ordersRes.documents;
             const today = new Date().toLocaleDateString();
             const todayOrders    = orders.filter(o => new Date(o.$createdAt).toLocaleDateString() === today);
@@ -171,33 +169,58 @@ export const LocalDashboard = ({ locationId }) => {
 
             <div className="bg-gradient-to-r from-primary/10 to-transparent border border-primary/20 rounded-[2.5rem] p-7 flex flex-col md:flex-row items-center justify-between gap-5 shadow-2xl relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-48 h-full bg-primary/5 blur-3xl rounded-full translate-x-1/2" />
-                <div className="flex items-center gap-5 relative z-10">
-                    <div className={`w-14 h-14 rounded-[1.5rem] flex items-center justify-center shadow-glow border transition ${
-                        hbStatus === 'ok'         ? 'bg-success/20 border-success/30 text-success' :
-                        hbStatus === 'retrying'   ? 'bg-yellow-500/20 border-yellow-500/30 text-yellow-400' :
-                        hbStatus === 'offline'    ? 'bg-gray-800 border-gray-700 text-gray-500' :
-                        'bg-primary/20 border-primary/20 text-primary'
-                    }`}>
-                        {hbStatus === 'ok'       && <Wifi size={28} />}
-                        {hbStatus === 'retrying' && <AlertTriangle size={28} />}
-                        {hbStatus === 'offline'  && <WifiOff size={28} />}
-                        {hbStatus === 'connecting' && <Activity size={28} className="animate-pulse" />}
+                <div className="flex flex-col xl:flex-row items-center gap-7 relative z-10 w-full lg:w-auto">
+                    {/* Indicador 1: Conectividad Técnica (Heartbeat) */}
+                    <div className="flex items-center gap-4 w-full sm:w-auto">
+                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-glow border transition ${
+                            hbStatus === 'ok'         ? 'bg-success/20 border-success/30 text-success' :
+                            hbStatus === 'retrying'   ? 'bg-yellow-500/20 border-yellow-500/30 text-yellow-400' :
+                            hbStatus === 'offline'    ? 'bg-gray-800 border-gray-700 text-gray-500' :
+                            'bg-primary/20 border-primary/20 text-primary'
+                        }`}>
+                            {hbStatus === 'ok'       && <Wifi size={24} />}
+                            {hbStatus === 'retrying' && <AlertTriangle size={24} />}
+                            {hbStatus === 'offline'  && <WifiOff size={24} />}
+                            {hbStatus === 'connecting' && <Activity size={24} className="animate-pulse" />}
+                        </div>
+                        <div>
+                            <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest leading-none mb-1">Conectividad</p>
+                            <h4 className="text-sm font-black text-white italic uppercase tracking-tight">
+                                {hbStatus === 'ok'         && 'Activa'}
+                                {hbStatus === 'retrying'   && 'Reintentando'}
+                                {hbStatus === 'offline'    && 'Sin Internet'}
+                                {hbStatus === 'connecting' && 'Conectando'}
+                            </h4>
+                        </div>
                     </div>
-                    <div>
-                        <h4 className="text-xl font-black text-white italic uppercase tracking-tight">
-                            {hbStatus === 'ok'         && 'Conectividad Activa'}
-                            {hbStatus === 'retrying'   && 'Reintentando...'}
-                            {hbStatus === 'offline'    && 'Sin Conexión'}
-                            {hbStatus === 'connecting' && 'Conectando...'}
-                        </h4>
-                        <p className="text-sm" style={{
-                            color: hbStatus === 'ok' ? '#9ca3af' : hbStatus === 'retrying' ? '#facc15bb' : '#6b7280'
-                        }}>
-                            {hbStatus === 'ok'       && 'Heartbeat sincronizado. Sucursal visible en tiempo real.'}
-                            {hbStatus === 'retrying' && 'Fallo de conexión. Reintentando con backoff...'}
-                            {hbStatus === 'offline'  && 'El dispositivo está sin internet.'}
-                            {hbStatus === 'connecting' && 'Estableciendo conexión con el servidor...'}
-                        </p>
+
+                    {/* Divisor vertical (solo desktop) */}
+                    <div className="hidden xl:block w-[1px] h-10 bg-white/10" />
+
+                    {/* Indicador 2: Disponibilidad Real (Visible para Clientes) */}
+                    <div className="flex items-center gap-4 w-full sm:w-auto">
+                        {(() => {
+                            const available = locationData ? BranchService.isAvailable(locationData) : false;
+                            const isOpen = locationData?.is_open;
+                            return (
+                                <>
+                                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-glow border transition ${
+                                        available ? 'bg-primary/20 border-primary/30 text-primary shadow-[0_0_15px_rgba(var(--primary-rgb),0.3)]' :
+                                        'bg-red-500/10 border-red-500/20 text-red-400'
+                                    }`}>
+                                        {available ? <Eye size={24} /> : <EyeOff size={24} />}
+                                    </div>
+                                    <div>
+                                        <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest leading-none mb-1">Estado de Venta</p>
+                                        <h4 className="text-sm font-black text-white italic uppercase tracking-tight">
+                                            {available ? 'Visible para Clientes' : 
+                                             !isOpen   ? 'Cerrado Manualmente' : 
+                                             'No Visible (Offline)'}
+                                        </h4>
+                                    </div>
+                                </>
+                            );
+                        })()}
                     </div>
                 </div>
                 <div className="flex items-center gap-4 relative z-10">

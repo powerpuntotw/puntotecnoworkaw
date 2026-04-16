@@ -7,6 +7,7 @@ import { useTheme } from '../context/ThemeContext';
 import { databases, client, withRetry, ConnectionMonitor } from '../lib/appwrite';
 import { Query } from 'appwrite';
 import { Link } from 'react-router';
+import { AccessService } from '../services/AccessService';
 
 function useAppwriteRealtime(channels, handler, deps = []) {
     const handlerRef = useRef(handler);
@@ -105,14 +106,26 @@ export const MainLayout = () => {
         (response) => {
             if (!initialLoadDone.current) return;
             if (!response.events.some(e => e.includes('.create'))) return;
+            
             const t = response.payload;
             const isAdmin = dbUser?.user_type === 'admin';
+            
+            console.log('[Realtime:Layout] Nuevo ticket detectado:', t.subject);
+
             if (!isAdmin && t.client_id !== user?.$id) return;
+            
             setUnreadCount(prev => prev + 1);
             setLatestTicketSubject(t.subject);
-            if (!isOnTicketsPage) { setShowSupportAlert(true); playAlert(); }
+
+            if (!isOnTicketsPage) {
+                console.log('[Realtime:Layout] Disparando alerta global (Usuario fuera de /tickets)');
+                setShowSupportAlert(true); 
+                playAlert(); 
+            } else {
+                console.log('[Realtime:Layout] Alerta global silenciada (Usuario en /tickets)');
+            }
         },
-        [!!dbUser]
+        [!!dbUser, isOnTicketsPage]
     );
 
     useAppwriteRealtime(
@@ -120,15 +133,22 @@ export const MainLayout = () => {
         (response) => {
             if (!initialLoadDone.current) return;
             if (!response.events.some(e => e.includes('.create'))) return;
+            
             const msg = response.payload;
             if (msg.sender_id === user?.$id) return;
+
+            console.log('[Realtime:Layout] Nuevo mensaje detectado');
+
             if (!isOnTicketsPage) {
+                console.log('[Realtime:Layout] Disparando alerta global de mensaje');
                 setShowSupportAlert(true);
                 setLatestTicketSubject(prev => prev || 'Nuevo mensaje de soporte');
                 playAlert();
+            } else {
+                console.log('[Realtime:Layout] Alerta de mensaje silenciada (Usuario en /tickets)');
             }
         },
-        [!!dbUser]
+        [!!dbUser, isOnTicketsPage]
     );
 
     useEffect(() => {
@@ -143,45 +163,91 @@ export const MainLayout = () => {
     const footerLogo2Url = logoDark ? getLogoUrl(logoDark) : null;
 
     const getNavLinks = () => {
-        const links = [{ to: '/dashboard', icon: <Home size={20} />, label: 'Inicio' }];
-        if (role === 'client') {
+        const links = [];
+
+        // 1. Inicio (Módulo base)
+        const canSeeDashboard = AccessService.canAccessModule(dbUser, 'dashboard') || 
+                               AccessService.canAccessModule(dbUser, 'dashboard_local') || 
+                               AccessService.canAccessModule(dbUser, 'dashboard_admin');
+        
+        if (canSeeDashboard) {
+            links.push({ to: '/dashboard', icon: <Home size={20} />, label: 'Inicio' });
+        }
+
+        // 2. Módulos de Cliente
+        if (AccessService.canAccessModule(dbUser, 'new_order')) {
             links.push({ to: '/orders/new', icon: <FileText size={20} />, label: 'Nueva Orden' });
-            links.push({ to: '/rewards', icon: <Gift size={20} />, label: 'Recompensas' });
+        }
+        if (AccessService.canAccessModule(dbUser, 'rewards_catalog')) {
+            links.push({ to: '/rewards', icon: <Gift size={20} />, label: role === 'admin' ? 'Ver Catálogo' : 'Recompensas' });
+        }
+        if (AccessService.canAccessModule(dbUser, 'order_history')) {
             links.push({ to: '/history', icon: <History size={20} />, label: 'Historial' });
-        } else if (role === 'local') {
+        }
+
+        // 3. Módulos de Local/Operador
+        if (AccessService.canAccessModule(dbUser, 'orders_local')) {
             links.push({ to: '/local/orders', icon: <FileText size={20} />, label: 'Órdenes' });
+        }
+        if (AccessService.canAccessModule(dbUser, 'customers_local')) {
             links.push({ to: '/local/customers', icon: <Users size={20} />, label: 'Clientes' });
+        }
+        if (AccessService.canAccessModule(dbUser, 'prices_local')) {
             links.push({ to: '/local/prices', icon: <DollarSign size={20} />, label: 'Precios' });
+        }
+        if (AccessService.canAccessModule(dbUser, 'redeems_local')) {
             links.push({ to: '/local/redeems', icon: <Ticket size={20} />, label: 'Canjes' });
-            // Vista propia del operador: catálogo de referencia + canjes pendientes
+        }
+        if (AccessService.canAccessModule(dbUser, 'rewards_local')) {
             links.push({ to: '/local/rewards', icon: <Gift size={20} />, label: 'Premios' });
-        } else if (role === 'admin') {
+        }
+
+        // 4. Módulos de Administrador Global
+        if (AccessService.canAccessModule(dbUser, 'users_admin')) {
             links.push({ to: '/admin/users', icon: <Users size={20} />, label: 'Usuarios' });
+        }
+        if (AccessService.canAccessModule(dbUser, 'locations_admin')) {
             links.push({ to: '/admin/locations', icon: <MapPin size={20} />, label: 'Locales' });
+        }
+        if (AccessService.canAccessModule(dbUser, 'orders_global')) {
             links.push({ to: '/admin/orders', icon: <FileText size={20} />, label: 'Órdenes' });
+        }
+        if (AccessService.canAccessModule(dbUser, 'rewards_global')) {
             links.push({ to: '/admin/rewards', icon: <Gift size={20} />, label: 'Premios' });
-            // Admin puede ver el catálogo tal como lo ven los clientes
-            links.push({ to: '/rewards', icon: <Gift size={20} />, label: 'Ver Catálogo' });
+        }
+        if (AccessService.canAccessModule(dbUser, 'reports_admin')) {
             links.push({ to: '/admin/reports', icon: <BarChart3 size={20} />, label: 'Reportes' });
+        }
+        if (AccessService.canAccessModule(dbUser, 'maintenance_admin')) {
             links.push({ to: '/admin/maintenance', icon: <Settings size={20} />, label: 'Mantenimiento' });
+        }
+        if (AccessService.canAccessModule(dbUser, 'branding_admin')) {
             links.push({ to: '/admin/branding', icon: <Palette size={20} />, label: 'Branding' });
+        }
+        if (AccessService.canAccessModule(dbUser, 'audit_admin')) {
             links.push({ to: '/admin/audit', icon: <History size={20} />, label: 'Auditoría' });
         }
+
+        // 5. Módulos Comunes
         links.push({ to: '/profile', icon: <UserCircle size={20} />, label: 'Perfil' });
-        links.push({
-            to: '/tickets',
-            icon: (
-                <span className="relative inline-flex">
-                    <MessageSquare size={20} />
-                    {unreadCount > 0 && !isOnTicketsPage && (
-                        <span className="absolute -top-1 -right-1 w-4 h-4 bg-primary text-white text-[9px] font-black rounded-full flex items-center justify-center animate-pulse">
-                            {unreadCount > 9 ? '9+' : unreadCount}
-                        </span>
-                    )}
-                </span>
-            ),
-            label: 'Soporte'
-        });
+
+        if (AccessService.canAccessModule(dbUser, 'support_tickets')) {
+            links.push({
+                to: '/tickets',
+                icon: (
+                    <span className="relative inline-flex">
+                        <MessageSquare size={20} />
+                        {unreadCount > 0 && !isOnTicketsPage && (
+                            <span className="absolute -top-1 -right-1 w-4 h-4 bg-primary text-white text-[9px] font-black rounded-full flex items-center justify-center animate-pulse">
+                                {unreadCount > 9 ? '9+' : unreadCount}
+                            </span>
+                        )}
+                    </span>
+                ),
+                label: 'Soporte'
+            });
+        }
+
         return links;
     };
 

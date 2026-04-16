@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
-import { databases } from '../../lib/appwrite';
-import { Query } from 'appwrite';
 import toast from 'react-hot-toast';
+import { RewardService } from '../../services/RewardService';
 import { Ticket, CheckCircle, Clock, Gift, Loader2, Scan, ChevronRight } from 'lucide-react';
 
 export const LocalRedeems = ({ locationId }) => {
@@ -13,22 +12,26 @@ export const LocalRedeems = ({ locationId }) => {
         if (!locationId) return;
         try {
             setLoading(true);
-            const res = await databases.listDocuments(import.meta.env.VITE_APPWRITE_DATABASE_ID, 'redeems',
-                [Query.equal('location_id', locationId), Query.orderDesc('$createdAt'), Query.limit(50)]);
-            setRedeems(res.documents);
-        } catch (e) { console.error(e); }
-        finally { setLoading(false); }
+            const docs = await RewardService.listRedeems({ locationId });
+            setRedeems(docs);
+        } catch (e) {
+            console.error('Error fetching redeems:', e);
+        } finally {
+            setLoading(false);
+        }
     };
 
     useEffect(() => { fetchRedeems(); }, [locationId]);
 
     const handleDeliver = async (id) => {
         try {
-            await databases.updateDocument(import.meta.env.VITE_APPWRITE_DATABASE_ID, 'redeems', id,
-                { status: 'entregado', delivered_at: new Date().toISOString() });
-            setRedeems(redeems.map(r => r.$id === id ? { ...r, status: 'entregado' } : r));
+            const updated = await RewardService.deliverReward(id);
+            setRedeems(redeems.map(r => r.$id === id ? updated : r));
             toast.success('Premio entregado correctamente');
-        } catch { toast.error('Error al procesar entrega.'); }
+        } catch (e) {
+            console.error('Deliver error:', e);
+            toast.error('Error al procesar entrega.');
+        }
     };
 
     const filtered = redeems.filter(r => r.code?.includes(searchCode) || r.$id.includes(searchCode));
