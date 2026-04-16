@@ -36,6 +36,7 @@ export const AccessService = {
      */
     isAdmin: (user) => user?.user_type === ROLES.ADMIN,
     isOperator: (user) => user?.user_type === ROLES.LOCAL,
+    isLocal: (user) => user?.user_type === ROLES.LOCAL,
     isClient: (user) => !user?.user_type || user?.user_type === ROLES.CLIENT,
 
     /**
