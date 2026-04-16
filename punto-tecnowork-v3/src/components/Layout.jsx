@@ -8,10 +8,6 @@ import { databases, client, withRetry, ConnectionMonitor } from '../lib/appwrite
 import { Query } from 'appwrite';
 import { Link } from 'react-router';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// BLINDAJE: useAppwriteRealtime — suscripción con auto-reconexión.
-// Cada vez que la conexión se pierde y recupera, re-suscribe automáticamente.
-// ─────────────────────────────────────────────────────────────────────────────
 function useAppwriteRealtime(channels, handler, deps = []) {
     const handlerRef = useRef(handler);
     handlerRef.current = handler;
@@ -19,7 +15,6 @@ function useAppwriteRealtime(channels, handler, deps = []) {
     const retryTimerRef = useRef(null);
 
     const subscribe = useCallback(() => {
-        // Limpiar suscripciones anteriores
         unsubsRef.current.forEach(fn => { try { fn(); } catch { } });
         unsubsRef.current = [];
         if (!ConnectionMonitor.isOnline) return;
@@ -30,14 +25,10 @@ function useAppwriteRealtime(channels, handler, deps = []) {
 
     useEffect(() => {
         subscribe();
-        // Reconectar cuando vuelve el internet
         const unsub = ConnectionMonitor.subscribe((isOnline) => {
             clearTimeout(retryTimerRef.current);
-            if (isOnline) {
-                retryTimerRef.current = setTimeout(subscribe, 2000);
-            }
+            if (isOnline) retryTimerRef.current = setTimeout(subscribe, 2000);
         });
-        // Reconectar cuando la pestaña vuelve al foco
         const onVisible = () => {
             if (!document.hidden && ConnectionMonitor.isOnline) {
                 clearTimeout(retryTimerRef.current);
@@ -55,7 +46,6 @@ function useAppwriteRealtime(channels, handler, deps = []) {
     }, [subscribe, ...deps]);
 }
 
-// Sonido de alerta — Web Audio API, sin dependencias
 const playAlert = () => {
     try {
         const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -80,14 +70,12 @@ export const MainLayout = () => {
     const location = useLocation();
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-    // ── BLINDAJE: banner de conexión global ───────────────────
     const [isOffline, setIsOffline] = useState(!ConnectionMonitor.isOnline);
     useEffect(() => {
         const unsub = ConnectionMonitor.subscribe((online) => setIsOffline(!online));
         return unsub;
     }, []);
 
-    // ── Alerta global de soporte ──────────────────────────────
     const [unreadCount, setUnreadCount] = useState(0);
     const [showSupportAlert, setShowSupportAlert] = useState(false);
     const [latestTicketSubject, setLatestTicketSubject] = useState('');
@@ -111,7 +99,6 @@ export const MainLayout = () => {
         loadInitial();
     }, [dbUser?.user_type]);
 
-    // BLINDAJE: Realtime tickets
     const dbId = import.meta.env.VITE_APPWRITE_DATABASE_ID;
     useAppwriteRealtime(
         dbUser ? [`databases.${dbId}.collections.tickets.documents`] : [],
@@ -128,7 +115,6 @@ export const MainLayout = () => {
         [!!dbUser]
     );
 
-    // BLINDAJE: Realtime messages
     useAppwriteRealtime(
         dbUser ? [`databases.${dbId}.collections.messages.documents`] : [],
         (response) => {
@@ -167,8 +153,8 @@ export const MainLayout = () => {
             links.push({ to: '/local/customers', icon: <Users size={20} />, label: 'Clientes' });
             links.push({ to: '/local/prices', icon: <DollarSign size={20} />, label: 'Precios' });
             links.push({ to: '/local/redeems', icon: <Ticket size={20} />, label: 'Canjes' });
-            // Local puede ver el catálogo de premios (solo visualización)
-            links.push({ to: '/rewards', icon: <Gift size={20} />, label: 'Catálogo' });
+            // Vista propia del operador: catálogo de referencia + canjes pendientes
+            links.push({ to: '/local/rewards', icon: <Gift size={20} />, label: 'Premios' });
         } else if (role === 'admin') {
             links.push({ to: '/admin/users', icon: <Users size={20} />, label: 'Usuarios' });
             links.push({ to: '/admin/locations', icon: <MapPin size={20} />, label: 'Locales' });
@@ -302,7 +288,6 @@ export const MainLayout = () => {
                     </div>
                 </header>
 
-                {/* ── BLINDAJE: Banner de sin conexión ── */}
                 {isOffline && (
                     <div className="mx-3 sm:mx-4 mt-3 flex items-center gap-3 bg-gray-900 border border-gray-700 rounded-2xl px-4 py-3 animate-in slide-in-from-top-2 duration-300">
                         <WifiOff size={16} className="text-gray-400 shrink-0 animate-pulse" />
@@ -314,7 +299,6 @@ export const MainLayout = () => {
                     </div>
                 )}
 
-                {/* ── Banner alerta soporte ── */}
                 {showSupportAlert && !isOnTicketsPage && (
                     <div className="mx-3 sm:mx-4 mt-3 flex items-center gap-3 bg-primary/10 border border-primary/30 rounded-2xl px-4 py-3 animate-in slide-in-from-top-2 duration-300">
                         <div className="w-8 h-8 bg-primary/20 rounded-xl flex items-center justify-center shrink-0">
