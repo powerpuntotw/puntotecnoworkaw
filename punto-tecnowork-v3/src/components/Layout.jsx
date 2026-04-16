@@ -98,7 +98,6 @@ export const MainLayout = () => {
         if (!dbUser) return;
         const dbId = import.meta.env.VITE_APPWRITE_DATABASE_ID;
         const isAdmin = dbUser.user_type === 'admin';
-        // Cargar cantidad inicial de tickets abiertos (blindado con withRetry)
         const loadInitial = async () => {
             try {
                 const queries = [Query.equal('status', 'open'), Query.orderDesc('$createdAt'), Query.limit(20)];
@@ -112,7 +111,7 @@ export const MainLayout = () => {
         loadInitial();
     }, [dbUser?.user_type]);
 
-    // BLINDAJE: Realtime tickets — auto-reconexión vía useAppwriteRealtime
+    // BLINDAJE: Realtime tickets
     const dbId = import.meta.env.VITE_APPWRITE_DATABASE_ID;
     useAppwriteRealtime(
         dbUser ? [`databases.${dbId}.collections.tickets.documents`] : [],
@@ -129,7 +128,7 @@ export const MainLayout = () => {
         [!!dbUser]
     );
 
-    // BLINDAJE: Realtime messages — auto-reconexión vía useAppwriteRealtime
+    // BLINDAJE: Realtime messages
     useAppwriteRealtime(
         dbUser ? [`databases.${dbId}.collections.messages.documents`] : [],
         (response) => {
@@ -146,11 +145,8 @@ export const MainLayout = () => {
         [!!dbUser]
     );
 
-    // Ocultar alerta al entrar a /tickets
     useEffect(() => {
-        if (isOnTicketsPage) {
-            setShowSupportAlert(false);
-        }
+        if (isOnTicketsPage) setShowSupportAlert(false);
     }, [isOnTicketsPage]);
 
     const role = dbUser?.user_type || 'client';
@@ -171,18 +167,21 @@ export const MainLayout = () => {
             links.push({ to: '/local/customers', icon: <Users size={20} />, label: 'Clientes' });
             links.push({ to: '/local/prices', icon: <DollarSign size={20} />, label: 'Precios' });
             links.push({ to: '/local/redeems', icon: <Ticket size={20} />, label: 'Canjes' });
+            // Local puede ver el catálogo de premios (solo visualización)
+            links.push({ to: '/rewards', icon: <Gift size={20} />, label: 'Catálogo' });
         } else if (role === 'admin') {
             links.push({ to: '/admin/users', icon: <Users size={20} />, label: 'Usuarios' });
             links.push({ to: '/admin/locations', icon: <MapPin size={20} />, label: 'Locales' });
             links.push({ to: '/admin/orders', icon: <FileText size={20} />, label: 'Órdenes' });
             links.push({ to: '/admin/rewards', icon: <Gift size={20} />, label: 'Premios' });
+            // Admin puede ver el catálogo tal como lo ven los clientes
+            links.push({ to: '/rewards', icon: <Gift size={20} />, label: 'Ver Catálogo' });
             links.push({ to: '/admin/reports', icon: <BarChart3 size={20} />, label: 'Reportes' });
             links.push({ to: '/admin/maintenance', icon: <Settings size={20} />, label: 'Mantenimiento' });
             links.push({ to: '/admin/branding', icon: <Palette size={20} />, label: 'Branding' });
             links.push({ to: '/admin/audit', icon: <History size={20} />, label: 'Auditoría' });
         }
         links.push({ to: '/profile', icon: <UserCircle size={20} />, label: 'Perfil' });
-        // Soporte con badge de no leídos
         links.push({
             to: '/tickets',
             icon: (
@@ -279,7 +278,6 @@ export const MainLayout = () => {
                         <span className="font-semibold text-sm">{displayName}</span>
                     </div>
                     <div className="flex items-center gap-2 sm:gap-3 ml-auto">
-                        {/* Campana de soporte — visible en header cuando hay mensajes no leídos */}
                         {unreadCount > 0 && !isOnTicketsPage && (
                             <Link to="/tickets"
                                 className="relative w-9 h-9 flex items-center justify-center rounded-xl border border-primary/30 bg-primary/10 text-primary animate-pulse hover:bg-primary/20 transition">
@@ -316,7 +314,7 @@ export const MainLayout = () => {
                     </div>
                 )}
 
-                {/* ── Banner alerta soporte — aparece en CUALQUIER pantalla ── */}
+                {/* ── Banner alerta soporte ── */}
                 {showSupportAlert && !isOnTicketsPage && (
                     <div className="mx-3 sm:mx-4 mt-3 flex items-center gap-3 bg-primary/10 border border-primary/30 rounded-2xl px-4 py-3 animate-in slide-in-from-top-2 duration-300">
                         <div className="w-8 h-8 bg-primary/20 rounded-xl flex items-center justify-center shrink-0">
