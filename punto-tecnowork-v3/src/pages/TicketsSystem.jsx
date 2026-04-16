@@ -22,6 +22,9 @@ const playNotificationSound = () => {
     } catch { }
 };
 
+// Etiqueta legible del rol
+const roleLabel = (role) => ({ admin: 'Administración', local: 'Operador', client: 'Cliente' }[role] || role);
+
 export const TicketsSystem = () => {
     const { user, dbUser } = useAuth();
     const [tickets, setTickets] = useState([]);
@@ -38,19 +41,33 @@ export const TicketsSystem = () => {
     const [newSubject, setNewSubject] = useState('');
     const [newDescription, setNewDescription] = useState('');
     const [creating, setCreating] = useState(false);
-    
+
     // Selectores destino
     const [recipientRole, setRecipientRole] = useState('admin');
     const [recipientId, setRecipientId] = useState('');
     const [usersList, setUsersList] = useState([]);
 
-    // Modal de cierre de ticket (requiere resolución obligatoria)
+    // Modal de cierre de ticket (requiere justificación obligatoria)
     const [showCloseModal, setShowCloseModal] = useState(false);
     const [closingTicket, setClosingTicket] = useState(null);
     const [resolution, setResolution] = useState('');
     const [closing, setClosing] = useState(false);
 
     const isAdmin = dbUser?.user_type === 'admin';
+    const myRole = dbUser?.user_type || 'client';
+
+    // Determina si el usuario actual puede cerrar un ticket dado
+    const canClose = (ticket) => {
+        if (!ticket || ticket.status === 'closed') return false;
+        if (isAdmin) return true;
+        // Es el creador del ticket
+        if (ticket.client_id === user?.$id) return true;
+        // Es el destinatario directo
+        if (ticket.recipient_id === user?.$id) return true;
+        // Es el operador local destinatario
+        if (dbUser?.user_type === 'local' && dbUser?.location_id && ticket.recipient_id === dbUser.location_id) return true;
+        return false;
+    };
 
     useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
@@ -82,9 +99,7 @@ export const TicketsSystem = () => {
                 try {
                     const dbId = import.meta.env.VITE_APPWRITE_DATABASE_ID;
                     if (recipientRole === 'local') {
-                        const res = await databases.listDocuments(dbId, 'printing_locations', [
-                            Query.limit(100)
-                        ]);
+                        const res = await databases.listDocuments(dbId, 'printing_locations', [Query.limit(100)]);
                         setUsersList(res.documents);
                     } else {
                         const res = await databases.listDocuments(dbId, 'users', [
@@ -93,7 +108,7 @@ export const TicketsSystem = () => {
                         ]);
                         setUsersList(res.documents);
                     }
-                } catch(e) { console.error(e); }
+                } catch (e) { console.error(e); }
             };
             fetchUsersList();
         } else {
@@ -146,7 +161,6 @@ export const TicketsSystem = () => {
                 response => {
                     if (response.payload.ticket_id === ticket.$id) {
                         setMessages(prev => prev.find(m => m.$id === response.payload.$id) ? prev : [...prev, response.payload]);
-                        // Alerta sonora si el mensaje es de otro usuario
                         if (response.payload.sender_id !== user.$id) playNotificationSound();
                     }
                 }
@@ -165,7 +179,7 @@ export const TicketsSystem = () => {
                 sender_id: user.$id,
                 sender_name: dbUser?.full_name || user.name,
                 content: newMessage,
-                role: dbUser?.user_type || 'client'
+                role: myRole
             });
             setNewMessage('');
             if (isAdmin && activeTicket.status === 'open') {
@@ -175,18 +189,16 @@ export const TicketsSystem = () => {
         finally { setSending(false); }
     };
 
-    // Crear ticket con modal propio (no prompt nativo)
+    // Crear ticket
     const handleCreateTicket = async () => {
         if (!newSubject.trim()) return;
         if (recipientRole !== 'admin' && !recipientId) {
             toast.error('Debés seleccionar un destinatario.');
             return;
         }
-
         const recipientUser = usersList.find(u => u.$id === recipientId);
         const rName = recipientRole === 'admin' ? 'Administración' : (recipientUser?.name || recipientUser?.full_name || 'Destinatario');
         const cRole = dbUser?.user_type || 'client';
-
         try {
             setCreating(true);
             const dbId = import.meta.env.VITE_APPWRITE_DATABASE_ID;
@@ -200,14 +212,13 @@ export const TicketsSystem = () => {
                 recipient_id: recipientRole === 'admin' ? 'global' : recipientId,
                 recipient_name: rName
             });
-            // Si hay descripción, enviarla como primer mensaje
             if (newDescription.trim()) {
                 await databases.createDocument(dbId, 'messages', ID.unique(), {
                     ticket_id: ticket.$id,
                     sender_id: user.$id,
                     sender_name: dbUser?.full_name || user.name,
                     content: newDescription.trim(),
-                    role: 'client'
+                    role: cRole
                 });
             }
             toast.success('Ticket abierto');
@@ -219,7 +230,7 @@ export const TicketsSystem = () => {
         finally { setCreating(false); }
     };
 
-    // Cerrar ticket — requiere resolución obligatoria
+    // Abrir modal de cierre — disponible para cualquier parte participante
     const openCloseModal = (ticket) => {
         setClosingTicket(ticket);
         setResolution('');
@@ -228,22 +239,24 @@ export const TicketsSystem = () => {
 
     const handleCloseTicket = async () => {
         if (!resolution.trim() || resolution.trim().length < 10) {
-            toast.error('Describí la resolución (mínimo 10 caracteres)');
+            toast.error('Justificá el cierre (mínimo 10 caracteres)');
             return;
         }
         try {
             setClosing(true);
             const dbId = import.meta.env.VITE_APPWRITE_DATABASE_ID;
-            // Guardar resolución como mensaje del sistema
+            const closerName = dbUser?.full_name || user?.name || 'Usuario';
+            const closerRoleLabel = roleLabel(myRole);
+            // Mensaje de cierre con quién lo cerró y su rol
             await databases.createDocument(dbId, 'messages', ID.unique(), {
                 ticket_id: closingTicket.$id,
                 sender_id: user.$id,
-                sender_name: `${dbUser?.full_name || 'Admin'} (resolución)`,
-                content: `✅ Ticket cerrado: ${resolution.trim()}`,
-                role: 'admin'
+                sender_name: `${closerName} (${closerRoleLabel})`,
+                content: `✅ Ticket cerrado por ${closerName} (${closerRoleLabel}): ${resolution.trim()}`,
+                role: myRole
             });
             await databases.updateDocument(dbId, 'tickets', closingTicket.$id, { status: 'closed' });
-            toast.success('Ticket cerrado con resolución registrada');
+            toast.success('Ticket cerrado con justificación registrada');
             setShowCloseModal(false);
             setResolution('');
             setClosingTicket(null);
@@ -260,6 +273,19 @@ export const TicketsSystem = () => {
     const statusLabel = (s) => ({ open: 'Abierto', answered: 'Respondido', closed: 'Cerrado' }[s] || s);
     const openCount = tickets.filter(t => t.status === 'open').length;
     const unansweredCount = tickets.filter(t => t.status === 'open').length;
+
+    // Textos contextuales del modal de cierre según el rol de quien cierra
+    const closeModalWarning = isAdmin
+        ? 'Explicá cómo se resolvió. La otra parte verá esta justificación en el chat.'
+        : myRole === 'local'
+            ? 'Justificá el cierre. El cliente verá este mensaje en el chat.'
+            : 'Justificá por qué cerrás el ticket. El operador verá este mensaje.';
+
+    const closePlaceholder = isAdmin
+        ? 'Ej: Se procesó el reembolso / Se corrigió el pedido...'
+        : myRole === 'local'
+            ? 'Ej: El problema fue solucionado / El cliente fue informado...'
+            : 'Ej: Mi consulta fue resuelta / Ya no necesito asistencia...';
 
     return (
         <div className="h-[calc(100vh-140px)] flex gap-6 overflow-hidden pb-4">
@@ -282,7 +308,6 @@ export const TicketsSystem = () => {
                         className="w-full flex items-center justify-center gap-2 bg-primary hover:bg-primary-glow text-white py-3 px-4 rounded-2xl font-black transition shadow-glow text-sm uppercase tracking-wider mb-4">
                         <Plus size={18} /> Abrir Nuevo Ticket
                     </button>
-                    {/* Para admin: botón de gestión */}
                     {isAdmin && (
                         <div className="flex items-center justify-between border-t border-white/5 pt-4">
                             <span className="text-[10px] text-gray-500 uppercase tracking-widest">
@@ -309,8 +334,8 @@ export const TicketsSystem = () => {
                                 <h4 className="text-sm font-black text-white truncate italic uppercase tracking-tight">{t.subject}</h4>
                                 <div className="flex items-center justify-between mt-1">
                                     <p className="text-[9px] text-gray-500 font-bold uppercase truncate">
-                                        {t.recipient_name 
-                                            ? `De: ${t.client_name} → Para: ${t.recipient_name}` 
+                                        {t.recipient_name
+                                            ? `De: ${t.client_name} → Para: ${t.recipient_name}`
                                             : t.client_name}
                                     </p>
                                     <span className={`text-[8px] font-black px-1.5 py-0.5 rounded border ${statusStyle(t.status)}`}>{statusLabel(t.status)}</span>
@@ -337,7 +362,8 @@ export const TicketsSystem = () => {
                                 <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border ${statusStyle(activeTicket.status)}`}>
                                     {statusLabel(activeTicket.status)}
                                 </span>
-                                {isAdmin && activeTicket.status !== 'closed' && (
+                                {/* Botón cerrar — visible para cualquier parte participante */}
+                                {canClose(activeTicket) && (
                                     <button onClick={() => openCloseModal(activeTicket)}
                                         className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-[10px] font-black uppercase bg-success/10 border border-success/20 text-success hover:bg-success/20 transition">
                                         <CheckCircle size={12} /> Cerrar Ticket
@@ -355,7 +381,7 @@ export const TicketsSystem = () => {
                             )}
                             {messages.map((m, idx) => {
                                 const isMine = m.sender_id === user.$id;
-                                const isResolution = m.content?.startsWith('✅ Ticket cerrado:');
+                                const isResolution = m.content?.startsWith('✅ Ticket cerrado por');
                                 if (isResolution) return (
                                     <div key={idx} className="flex justify-center">
                                         <div className="px-5 py-3 bg-success/10 border border-success/20 rounded-2xl text-success text-xs font-bold max-w-[80%] text-center">
@@ -432,7 +458,6 @@ export const TicketsSystem = () => {
                             </button>
                         </div>
                         <div className="space-y-4">
-                            {/* Role Selector */}
                             <div className="flex gap-4">
                                 {dbUser?.user_type === 'local' && (
                                     <div className="flex-1">
@@ -455,7 +480,6 @@ export const TicketsSystem = () => {
                                 )}
                             </div>
 
-                            {/* User Selector if not Global Admin */}
                             {recipientRole !== 'admin' && (
                                 <div>
                                     <label className="text-[10px] text-gray-500 font-black uppercase tracking-widest block mb-2">
@@ -466,8 +490,8 @@ export const TicketsSystem = () => {
                                         <option value="">-- Seleccionar destinatario --</option>
                                         {usersList.map(u => (
                                             <option key={u.$id} value={u.$id}>
-                                                {recipientRole === 'local' 
-                                                    ? `${u.name || 'Local'} ${u.address ? `(${u.address})` : ''}` 
+                                                {recipientRole === 'local'
+                                                    ? `${u.name || 'Local'} ${u.address ? `(${u.address})` : ''}`
                                                     : (u.full_name || u.email)}
                                             </option>
                                         ))}
@@ -505,7 +529,7 @@ export const TicketsSystem = () => {
                 </div>
             )}
 
-            {/* ── Modal cerrar ticket (resolución obligatoria) ── */}
+            {/* ── Modal cerrar ticket (justificación obligatoria para ambas partes) ── */}
             {showCloseModal && closingTicket && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xl">
                     <div style={{ backgroundColor: '#0a0a0f' }} className="border border-white/10 w-full max-w-lg rounded-[2.5rem] p-8 shadow-2xl">
@@ -523,19 +547,26 @@ export const TicketsSystem = () => {
                             </button>
                         </div>
 
+                        {/* Aviso contextual según rol */}
                         <div className="p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-2xl mb-5 flex gap-3">
                             <AlertCircle size={18} className="text-yellow-400 shrink-0 mt-0.5" />
-                            <p className="text-yellow-400/80 text-sm">
-                                Debés explicar cómo se resolvió el problema. El cliente verá esta resolución en el chat.
-                            </p>
+                            <p className="text-yellow-400/80 text-sm">{closeModalWarning}</p>
+                        </div>
+
+                        {/* Etiqueta de quién cierra */}
+                        <div className="flex items-center gap-2 mb-4 px-1">
+                            <span className="text-[10px] text-gray-500 uppercase tracking-widest">Cerrando como:</span>
+                            <span className="text-[10px] font-black uppercase tracking-wider text-white bg-white/10 px-3 py-1 rounded-full border border-white/10">
+                                {roleLabel(myRole)} — {dbUser?.full_name || user?.name}
+                            </span>
                         </div>
 
                         <div>
                             <label className="text-[10px] text-gray-500 font-black uppercase tracking-widest block mb-2">
-                                Resolución * <span className="text-gray-600 font-normal normal-case">(mínimo 10 caracteres)</span>
+                                Justificación * <span className="text-gray-600 font-normal normal-case">(mínimo 10 caracteres)</span>
                             </label>
                             <textarea rows={5} value={resolution} onChange={e => setResolution(e.target.value)}
-                                placeholder="Ej: Se procesó el reembolso / Se corrigió el pedido / El cliente fue informado de los tiempos de demora..."
+                                placeholder={closePlaceholder}
                                 style={{ backgroundColor: '#1a1a1a', color: '#fff', border: `1px solid ${resolution.trim().length >= 10 ? 'rgba(164,204,57,0.4)' : 'rgba(255,255,255,0.15)'}`, borderRadius: '16px', padding: '14px 18px', width: '100%', fontSize: '14px', fontWeight: '600', outline: 'none', resize: 'none', boxSizing: 'border-box' }} />
                             <p className={`text-[10px] mt-1 text-right ${resolution.trim().length >= 10 ? 'text-success' : 'text-gray-600'}`}>
                                 {resolution.trim().length} / 10 caracteres mínimos
