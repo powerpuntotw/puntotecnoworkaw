@@ -123,11 +123,11 @@ export const Landing = () => {
             {/* Footer */}
             <footer className="border-t border-white/5 py-8 px-6">
                 <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
-                    <p className="text-xs text-gray-600">
+                    <p className="text-xs text-gray-400">
                         © {new Date().getFullYear()} {displayName} · Plataforma de impresión inteligente
                     </p>
                     <div className="flex items-center gap-3">
-                        <span className="text-xs text-gray-700 mr-1">Powered by</span>
+                        <span className="text-xs text-gray-400 mr-1">Powered by</span>
                         {footerLogo1Url && <img src={footerLogo1Url} alt="" className="h-7 w-auto object-contain opacity-60 hover:opacity-100 transition" width="80" height="28" />}
                         {footerLogo2Url && <img src={footerLogo2Url} alt="" className="h-7 w-auto object-contain opacity-60 hover:opacity-100 transition" width="80" height="28" />}
                         {!footerLogo1Url && !footerLogo2Url && <span className="text-xs text-gray-700">{displayName} v3</span>}
