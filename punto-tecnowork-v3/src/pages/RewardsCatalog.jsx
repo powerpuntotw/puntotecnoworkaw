@@ -169,7 +169,7 @@ export const RewardsCatalog = () => {
                             <div key={reward.$id} className="bg-card/50 border border-white/10 rounded-[28px] overflow-hidden group hover:border-primary/40 transition duration-500 shadow-xl flex flex-col">
                                 <div className="h-44 bg-white/5 relative overflow-hidden flex items-center justify-center">
                                     {reward.image_id ? (
-                                        <img src={storage.getFilePreview('rewards_images', reward.image_id)} alt={reward.name} className="w-full h-full object-cover group-hover:scale-105 transition duration-700"/>
+                                        <img src={storage.getFilePreview('rewards_images', reward.image_id)} alt={reward.name} className="w-full h-full object-cover group-hover:scale-105 transition duration-700" width="400" height="176" />
                                     ) : (
                                         <Gift size={56} className="text-gray-700"/>
                                     )}

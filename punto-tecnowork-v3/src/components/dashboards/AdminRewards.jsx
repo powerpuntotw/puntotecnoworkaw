@@ -255,7 +255,7 @@ export const AdminRewards = () => {
                             <div className="relative aspect-square rounded-xl bg-white/5 overflow-hidden mb-4 flex items-center justify-center">
                                 {reward.image_id ? (
                                     <img src={getImageUrl(reward.image_id)} alt={reward.name}
-                                        className="w-full h-full object-cover group-hover:scale-105 transition duration-500" />
+                                        className="w-full h-full object-cover group-hover:scale-105 transition duration-500" width="400" height="400" />
                                 ) : (
                                     <div className="flex flex-col items-center gap-2 text-gray-600">
                                         {reward.is_print_pack
@@ -437,7 +437,7 @@ export const AdminRewards = () => {
                                 </label>
                                 {modalImageSrc ? (
                                     <div className="relative rounded-2xl overflow-hidden aspect-video bg-white/5 border border-white/10">
-                                        <img src={modalImageSrc} alt="Preview" className="w-full h-full object-cover" />
+                                        <img src={modalImageSrc} alt="Preview" className="w-full h-full object-cover" width="480" height="270" />
                                         <div className="absolute inset-0 bg-black/40 opacity-0 hover:opacity-100 transition flex items-center justify-center gap-3">
                                             <button type="button" onClick={() => fileInputRef.current?.click()}
                                                 className="flex items-center gap-1.5 px-4 py-2 bg-primary rounded-xl text-white text-xs font-black uppercase shadow-glow">

@@ -24,7 +24,7 @@ export const Landing = () => {
                 <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
                     <div className="flex items-center gap-3">
                         {navLogoUrl ? (
-                            <img src={navLogoUrl} alt={displayName} className="w-10 h-10 object-contain rounded-xl" />
+                            <img src={navLogoUrl} alt={displayName} className="w-10 h-10 object-contain rounded-xl" width="40" height="40" />
                         ) : (
                             <div className="w-10 h-10 rounded-xl bg-gradient-hero flex items-center justify-center font-bold text-xl shadow-[0_0_15px_rgba(235,28,36,0.5)] text-white">
                                 {displayName.charAt(0).toUpperCase()}
@@ -128,8 +128,8 @@ export const Landing = () => {
                     </p>
                     <div className="flex items-center gap-3">
                         <span className="text-xs text-gray-700 mr-1">Powered by</span>
-                        {footerLogo1Url && <img src={footerLogo1Url} alt="" className="h-7 w-auto object-contain opacity-60 hover:opacity-100 transition" />}
-                        {footerLogo2Url && <img src={footerLogo2Url} alt="" className="h-7 w-auto object-contain opacity-60 hover:opacity-100 transition" />}
+                        {footerLogo1Url && <img src={footerLogo1Url} alt="" className="h-7 w-auto object-contain opacity-60 hover:opacity-100 transition" width="80" height="28" />}
+                        {footerLogo2Url && <img src={footerLogo2Url} alt="" className="h-7 w-auto object-contain opacity-60 hover:opacity-100 transition" width="80" height="28" />}
                         {!footerLogo1Url && !footerLogo2Url && <span className="text-xs text-gray-700">{displayName} v3</span>}
                     </div>
                 </div>

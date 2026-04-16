@@ -120,7 +120,7 @@ export const AdminBranding = () => {
                                     <div className="flex items-center gap-3">
                                         {config[type] ? (
                                             <div className="relative group w-12 h-12 rounded-lg overflow-hidden border border-white/10">
-                                                <img src={storage.getFilePreview(import.meta.env.VITE_STORAGE_BUCKET_ID || 'branding', config[type])} alt="Logo" className="w-full h-full object-contain" />
+                                                <img src={storage.getFilePreview(import.meta.env.VITE_STORAGE_BUCKET_ID || 'branding', config[type])} alt="Logo" className="w-full h-full object-contain" width="48" height="48" />
                                                 <button onClick={() => setConfig({...config, [type]: ''})} className="absolute inset-0 bg-red-500/80 flex items-center justify-center opacity-0 group-hover:opacity-100 transition"><Trash2 size={16} className="text-white" /></button>
                                             </div>
                                         ) : (

@@ -220,7 +220,7 @@ export const MainLayout = () => {
             <aside className="hidden lg:flex w-64 border-r border-white/5 bg-card/50 backdrop-blur-md flex-col py-6 transition-all shrink-0">
                 <div className="px-8 mb-6 flex items-center shrink-0">
                     {logoUrl ? (
-                        <img src={logoUrl} className="w-10 h-10 object-contain rounded-xl" alt={displayName} />
+                        <img src={logoUrl} className="w-10 h-10 object-contain rounded-xl" alt={displayName} width="40" height="40" />
                     ) : (
                         <div className="w-10 h-10 rounded-xl bg-gradient-hero flex items-center justify-center font-bold text-xl text-white">
                             {displayName.charAt(0).toUpperCase()}
@@ -239,8 +239,8 @@ export const MainLayout = () => {
                     </button>
                     <div className="mt-3 px-2 flex items-center gap-2">
                         <span className="text-xs text-gray-600 mr-1">Powered by</span>
-                        {footerLogo1Url && <img src={footerLogo1Url} alt="" className="h-5 w-auto object-contain opacity-50 hover:opacity-100 transition" />}
-                        {footerLogo2Url && <img src={footerLogo2Url} alt="" className="h-5 w-auto object-contain opacity-50 hover:opacity-100 transition" />}
+                        {footerLogo1Url && <img src={footerLogo1Url} alt="" className="h-5 w-auto object-contain opacity-50 hover:opacity-100 transition" width="80" height="20" />}
+                        {footerLogo2Url && <img src={footerLogo2Url} alt="" className="h-5 w-auto object-contain opacity-50 hover:opacity-100 transition" width="80" height="20" />}
                         {!footerLogo1Url && !footerLogo2Url && <span className="text-xs text-gray-600">{displayName}</span>}
                     </div>
                 </div>
@@ -255,7 +255,7 @@ export const MainLayout = () => {
                     </button>
                     <div className="lg:hidden flex items-center gap-2">
                         {logoUrl ? (
-                            <img src={logoUrl} className="w-7 h-7 object-contain rounded-lg" alt="" />
+                            <img src={logoUrl} className="w-7 h-7 object-contain rounded-lg" alt="" width="28" height="28" />
                         ) : (
                             <div className="w-7 h-7 rounded-lg bg-gradient-hero flex items-center justify-center text-xs font-bold text-white">
                                 {displayName.charAt(0)}
@@ -348,7 +348,7 @@ export const MainLayout = () => {
                         <div className="flex items-center justify-between px-5 py-4 border-b border-white/5 shrink-0">
                             <div className="flex items-center gap-3">
                                 {logoUrl ? (
-                                    <img src={logoUrl} className="w-8 h-8 object-contain rounded-lg" alt="" />
+                                    <img src={logoUrl} className="w-8 h-8 object-contain rounded-lg" alt="" width="32" height="32" />
                                 ) : (
                                     <div className="w-8 h-8 rounded-lg bg-gradient-hero flex items-center justify-center font-bold text-sm text-white">
                                         {displayName.charAt(0)}
@@ -373,8 +373,8 @@ export const MainLayout = () => {
                             </button>
                             <div className="flex items-center gap-2 px-3">
                                 <span className="text-xs text-gray-600">Powered by</span>
-                                {footerLogo1Url && <img src={footerLogo1Url} alt="" className="h-4 w-auto object-contain opacity-60" />}
-                                {footerLogo2Url && <img src={footerLogo2Url} alt="" className="h-4 w-auto object-contain opacity-60" />}
+                                {footerLogo1Url && <img src={footerLogo1Url} alt="" className="h-4 w-auto object-contain opacity-60" width="64" height="16" />}
+                                {footerLogo2Url && <img src={footerLogo2Url} alt="" className="h-4 w-auto object-contain opacity-60" width="64" height="16" />}
                                 {!footerLogo1Url && !footerLogo2Url && <span className="text-xs text-gray-600">{displayName}</span>}
                             </div>
                         </div>

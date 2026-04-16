@@ -78,7 +78,7 @@ export const UserProfile = () => {
                         <div className="relative shrink-0">
                             <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-3xl shadow-2xl border-4 border-white/10 overflow-hidden">
                                 <img src={avatarUrl} alt={user?.name || 'Avatar'} className="w-full h-full object-cover"
-                                    onError={(e) => { e.target.src = fallbackAvatar; }} />
+                                    width="96" height="96" onError={(e) => { e.target.src = fallbackAvatar; }} />
                             </div>
                             <div className="absolute -bottom-2 -right-2 w-8 h-8 rounded-xl flex items-center justify-center shadow-lg border-2 border-background" style={{ backgroundColor: tier.color }}>
                                 <TierIcon size={14} className="text-white" />

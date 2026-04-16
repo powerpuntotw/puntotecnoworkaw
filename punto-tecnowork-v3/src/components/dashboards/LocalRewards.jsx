@@ -195,7 +195,7 @@ export const LocalRewards = ({ locationId }) => {
                                     {/* Miniatura del premio */}
                                     <div className="w-12 h-12 rounded-xl bg-white/5 border border-white/10 overflow-hidden shrink-0 flex items-center justify-center">
                                         {imgUrl
-                                            ? <img src={imgUrl} alt={r.reward_name} className="w-full h-full object-cover" />
+                                            ? <img src={imgUrl} alt={r.reward_name} className="w-full h-full object-cover" width="48" height="48" />
                                             : <Gift size={20} className="text-gray-600" />
                                         }
                                     </div>
@@ -270,7 +270,7 @@ export const LocalRewards = ({ locationId }) => {
                                     {/* Imagen */}
                                     <div className="relative h-36 bg-white/5 flex items-center justify-center overflow-hidden">
                                         {imgUrl
-                                            ? <img src={imgUrl} alt={reward.name} className="w-full h-full object-cover group-hover:scale-105 transition duration-500" />
+                                            ? <img src={imgUrl} alt={reward.name} className="w-full h-full object-cover group-hover:scale-105 transition duration-500" width="400" height="144" />
                                             : <div className="flex flex-col items-center gap-2 text-gray-700">
                                                 <ImageIcon size={32} />
                                               </div>
