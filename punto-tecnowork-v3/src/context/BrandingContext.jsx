@@ -12,7 +12,12 @@ export const BrandingProvider = ({ children }) => {
         tagline: 'Impresiones rápidas y fáciles',
         logoMain: '',
         logoLight: '',
-        logoDark: ''
+        logoDark: '',
+        colors: {
+            primary: '#EB1C24',
+            secondary: '#0093D8',
+            accent: '#FFC905'
+        }
     });
     const [loading, setLoading] = useState(true);
 
@@ -25,7 +30,14 @@ export const BrandingProvider = ({ children }) => {
             
             if (res.documents.length > 0) {
                 const configData = JSON.parse(res.documents[0].data);
-                setBranding(configData);
+                setBranding(prev => ({
+                    ...prev,
+                    ...configData,
+                    colors: {
+                        ...prev.colors,
+                        ...(configData.colors || {})
+                    }
+                }));
             }
         } catch (error) {
             console.error("Error fetching branding:", error);
@@ -38,7 +50,20 @@ export const BrandingProvider = ({ children }) => {
         fetchBranding();
     }, []);
 
+    // Aplicar colores dinámicos al root
+    useEffect(() => {
+        if (branding.colors) {
+            const root = document.documentElement;
+            Object.entries(branding.colors).forEach(([key, value]) => {
+                if (value) {
+                    root.style.setProperty(`--color-brand-${key}`, value);
+                }
+            });
+        }
+    }, [branding.colors]);
+
     const getLogoUrl = (fileId) => {
+
         if (!fileId) return null;
         try {
             const bucketId = import.meta.env.VITE_STORAGE_BUCKET_ID || 'branding';

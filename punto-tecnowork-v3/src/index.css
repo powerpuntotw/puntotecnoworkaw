@@ -1,17 +1,25 @@
 @import "tailwindcss";
 
+:root {
+  --color-brand-primary: #EB1C24;
+  --color-brand-secondary: #0093D8;
+  --color-brand-accent: #FFC905;
+  --color-brand-bg: #0a0a0f;
+  --color-brand-text: #f1f5f9;
+}
+
 @theme {
-  --color-background: #0a0a0f;
-  --color-foreground: #f1f5f9;
+  --color-background: var(--color-brand-bg);
+  --color-foreground: var(--color-brand-text);
   --color-dark: #1a1a1a;
   --color-card: rgba(255, 255, 255, 0.04);
   --color-card-hover: rgba(255, 255, 255, 0.08);
 
-  --color-primary: #EB1C24;
+  --color-primary: var(--color-brand-primary);
   --color-primary-glow: #ff4d4d;
   
-  --color-accent: #FFC905;
-  --color-secondary: #0093D8;
+  --color-accent: var(--color-brand-accent);
+  --color-secondary: var(--color-brand-secondary);
   --color-success: #A4CC39;
   --color-warning: #FFC905;
 
@@ -24,6 +32,7 @@
   --background-image-gradient-hero: linear-gradient(135deg, #EB1C24 0%, #0093D8 50%, #A4CC39 100%);
 }
 
+
 @layer base {
   body {
     background-color: var(--color-background);
@@ -35,12 +44,13 @@
 
 /* ===== MODO CLARO ===== */
 .light {
-  --color-background: #f8f9fb;
-  --color-foreground: #0f172a;
+  --color-brand-bg: #f8f9fb;
+  --color-brand-text: #0f172a;
   --color-dark: #e2e8f0;
   --color-card: rgba(0, 0, 0, 0.04);
   --color-card-hover: rgba(0, 0, 0, 0.08);
 }
+
 
 .light body {
   background-color: var(--color-background);

@@ -239,46 +239,35 @@ export const NewOrderFlow = () => {
         const hasPP = ppEnabledLocs.includes(loc.$id);
         return (
             <div onClick={() => onSelect(loc)}
-                className={`p-5 rounded-2xl border cursor-pointer transition-all duration-200 ${selected ? 'border-primary bg-primary/10 ring-2 ring-primary/30' : 'border-white/10 bg-card/40 hover:border-white/25'}`}>
+                className={`p-4 sm:p-5 rounded-2xl border cursor-pointer transition-all duration-200 ${selected ? 'border-primary bg-primary/10 ring-2 ring-primary/30' : 'border-white/10 bg-card/40 hover:border-white/25'}`}>
                 <div className="flex items-start justify-between gap-3 mb-3">
-                    <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                            <h3 className="text-white font-black text-base tracking-tight">{loc.name}</h3>
-                            {loc.has_fotoya && <span className="text-[9px] font-black bg-primary/20 text-primary border border-primary/30 px-2 py-0.5 rounded-full uppercase">FotoYa</span>}
-                            {hasPP && <span className="text-[9px] font-black bg-primary/20 text-primary border border-primary/30 px-2 py-0.5 rounded-full uppercase flex items-center gap-0.5"><Printer size={8} /> PrintPass™</span>}
-                        </div>
-                        <div className="flex items-center gap-1.5 text-gray-400 text-xs">
-                            <MapPin size={12} className="shrink-0" /> {loc.address}
-                        </div>
-                        {loc.schedule && (
-                            <div className="flex items-center gap-1.5 text-gray-500 text-[11px] mt-1">
-                                <Clock size={11} className="shrink-0" /> {loc.schedule}
+                    <div className="flex-1 min-w-0">
+                        <div className="flex items-center flex-wrap gap-2 mb-1">
+                            <h3 className="text-white font-black text-sm sm:text-base tracking-tight truncate">{loc.name}</h3>
+                            <div className="flex gap-1">
+                                {loc.has_fotoya && <span className="text-[8px] font-black bg-primary/20 text-primary border border-primary/30 px-1.5 py-0.5 rounded-full uppercase">Foto</span>}
+                                {hasPP && <span className="text-[8px] font-black bg-primary/20 text-primary border border-primary/30 px-1.5 py-0.5 rounded-full uppercase flex items-center gap-0.5">PP</span>}
                             </div>
-                        )}
+                        </div>
+                        <div className="flex items-center gap-1.5 text-gray-400 text-[10px] sm:text-xs truncate">
+                            <MapPin size={10} className="shrink-0" /> {loc.address}
+                        </div>
                     </div>
-                    {selected && <CheckCircle2 size={22} className="text-primary shrink-0 mt-1" />}
+                    {selected && <CheckCircle2 size={20} className="text-primary shrink-0 mt-0.5" />}
                 </div>
                 <div className="flex flex-wrap gap-1.5">
-                    <span className="flex items-center gap-1 text-[9px] font-black px-2 py-1 rounded-lg bg-success/10 border border-success/20 text-success uppercase">
-                        <span className="w-1.5 h-1.5 rounded-full bg-success"></span> Abierto
+                    <span className="flex items-center gap-1 text-[8px] font-black px-1.5 py-0.5 rounded-lg bg-success/10 border border-success/20 text-success uppercase">
+                        <span className="w-1 h-1 rounded-full bg-success"></span> Abierto
                     </span>
                     {online ? (
-                        <span className="flex items-center gap-1 text-[9px] font-black px-2 py-1 rounded-lg bg-secondary/10 border border-secondary/20 text-secondary uppercase">
-                            <Wifi size={9} /> Atendiendo ahora
+                        <span className="flex items-center gap-1 text-[8px] font-black px-1.5 py-0.5 rounded-lg bg-secondary/10 border border-secondary/20 text-secondary uppercase">
+                            <Wifi size={8} /> Online
                         </span>
                     ) : (
-                        <span className="flex items-center gap-1 text-[9px] font-black px-2 py-1 rounded-lg bg-yellow-500/10 border border-yellow-500/20 text-yellow-400 uppercase" title={lastSeen}>
-                            <WifiOff size={9} /> Sin operador activo
+                        <span className="flex items-center gap-1 text-[8px] font-black px-1.5 py-0.5 rounded-lg bg-yellow-500/10 border border-yellow-500/20 text-yellow-500 uppercase">
+                            <WifiOff size={8} /> {lastSeen}
                         </span>
                     )}
-                    {loc.has_color_printing && (
-                        <span className="text-[9px] font-black px-2 py-1 rounded-lg bg-secondary/10 border border-secondary/20 text-secondary uppercase">
-                            Color {loc.max_color_size}
-                        </span>
-                    )}
-                    <span className="text-[9px] font-black px-2 py-1 rounded-lg bg-white/5 border border-white/10 text-gray-400 uppercase">
-                        B&N {loc.max_bw_size}
-                    </span>
                 </div>
             </div>
         );
@@ -292,29 +281,35 @@ export const NewOrderFlow = () => {
                 <p className="text-gray-400 mt-1">Cargá tus documentos y retirálos en sucursal.</p>
             </div>
 
-            {/* Stepper */}
-            <div className="flex items-center gap-2">
-                {[['1', 'Archivos'], ['2', 'Sucursal'], ['3', 'Opciones']].map(([n, label], i) => (
-                    <div key={n} className="flex items-center gap-2">
-                        <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-black uppercase transition ${step === i+1 ? 'bg-primary text-white' : step > i+1 ? 'bg-success/20 text-success' : 'bg-white/5 text-gray-500'}`}>
-                            {step > i+1 ? <CheckCircle2 size={12} /> : <span>{n}</span>} {label}
-                        </div>
-                        {i < 2 && <ChevronRight size={14} className="text-gray-700" />}
-                    </div>
-                ))}
+            {/* Stepper / Progress Reader */}
+            <div className="flex flex-col gap-2">
+                <div className="flex justify-between items-end px-1">
+                    <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">
+                        Paso <span className="text-primary">{step}</span> de 3
+                    </span>
+                    <span className="text-xs font-black text-white italic truncate uppercase">
+                        {['Cargar Archivos', 'Elegir Sucursal', 'Personalizar'][step - 1]}
+                    </span>
+                </div>
+                <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden border border-white/5">
+                    <div 
+                        className="h-full bg-primary transition-all duration-500 ease-out shadow-glow" 
+                        style={{ width: `${(step / 3) * 100}%` }}
+                    />
+                </div>
             </div>
 
             {/* PASO 1 */}
             {step === 1 && (
                 <div className="space-y-5">
-                    <div {...getRootProps()} className={`border-2 border-dashed ${isDragActive ? 'border-primary bg-primary/10' : 'border-white/10 bg-card/30'} rounded-[2rem] p-14 flex flex-col items-center justify-center text-center transition cursor-pointer hover:border-primary/50`}>
+                    <div {...getRootProps()} className={`border-2 border-dashed ${isDragActive ? 'border-primary bg-primary/10' : 'border-white/10 bg-card/30'} rounded-[2rem] p-8 sm:p-14 flex flex-col items-center justify-center text-center transition cursor-pointer hover:border-primary/50`}>
                         <input {...getInputProps()} />
-                        <div className="p-5 bg-primary/10 rounded-full mb-5 ring-1 ring-primary/20">
-                            <UploadCloud size={48} className="text-primary" />
+                        <div className="p-4 sm:p-5 bg-primary/10 rounded-full mb-4 sm:mb-5 ring-1 ring-primary/20">
+                            <UploadCloud size={32} className="text-primary sm:w-12 sm:h-12" />
                         </div>
-                        <h3 className="text-xl font-black text-white mb-2 italic uppercase">{isDragActive ? '¡Soltá los archivos!' : 'Arrastrá tus documentos'}</h3>
-                        <p className="text-gray-500 mb-6 text-sm">PDF, Word o Imágenes (JPG/PNG) — máx. 20MB c/u</p>
-                        <div className="px-8 py-3 bg-primary hover:bg-primary-glow text-white rounded-xl font-black shadow-glow transition uppercase text-sm">Seleccionar Archivos</div>
+                        <h3 className="text-lg sm:text-xl font-black text-white mb-2 italic uppercase">{isDragActive ? '¡Soltá los archivos!' : 'Arrastrá tus documentos'}</h3>
+                        <p className="text-gray-500 mb-6 text-xs sm:text-sm px-4">PDF, Word o Imágenes (JPG/PNG) — máx. 20MB c/u</p>
+                        <div className="w-full sm:w-auto px-8 py-3.5 bg-primary hover:bg-primary-glow text-white rounded-xl font-black shadow-glow transition uppercase text-sm">Seleccionar Archivos</div>
                     </div>
                     {files.length > 0 && (
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -335,7 +330,7 @@ export const NewOrderFlow = () => {
                         </div>
                     )}
                     <button onClick={() => setStep(2)} disabled={files.length === 0}
-                        className="w-full py-4 rounded-2xl bg-primary hover:bg-primary-glow text-white font-black text-lg shadow-glow transition disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-3 uppercase tracking-tighter italic">
+                        className="hidden sm:flex w-full py-4 rounded-2xl bg-primary hover:bg-primary-glow text-white font-black text-lg shadow-glow transition disabled:opacity-30 disabled:cursor-not-allowed items-center justify-center gap-3 uppercase tracking-tighter italic">
                         Continuar <ChevronRight size={20} />
                     </button>
                 </div>
@@ -360,7 +355,7 @@ export const NewOrderFlow = () => {
                             ))}
                         </div>
                     )}
-                    <div className="flex gap-3">
+                    <div className="hidden sm:flex gap-3">
                         <button onClick={() => setStep(1)} className="flex items-center gap-2 px-6 py-4 rounded-2xl bg-white/5 text-gray-400 font-black hover:bg-white/10 transition border border-white/5">
                             <ChevronLeft size={18} /> Volver
                         </button>
@@ -494,18 +489,18 @@ export const NewOrderFlow = () => {
                         </div>
 
                         {/* Copias */}
-                        <div className="flex justify-between items-center bg-white/5 border border-white/5 rounded-2xl p-4">
+                        <div className="flex justify-between items-center bg-white/5 border border-white/5 rounded-2xl p-4 min-h-[72px]">
                             <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Juegos / Copias</span>
                             <div className="flex items-center gap-4">
-                                <button onClick={() => setCopies(Math.max(1, copies - 1))} className="w-9 h-9 rounded-xl bg-white/5 hover:bg-primary text-gray-400 hover:text-white font-black transition">-</button>
-                                <span className="font-black text-white text-xl w-6 text-center italic">{copies}</span>
-                                <button onClick={() => setCopies(copies + 1)} className="w-9 h-9 rounded-xl bg-white/5 hover:bg-primary text-gray-400 hover:text-white font-black transition">+</button>
+                                <button onClick={() => setCopies(Math.max(1, copies - 1))} className="w-12 h-12 rounded-xl bg-white/5 hover:bg-primary text-gray-400 hover:text-white font-black transition flex items-center justify-center text-xl shadow-glow">-</button>
+                                <span className="font-black text-white text-2xl w-8 text-center italic">{copies}</span>
+                                <button onClick={() => setCopies(copies + 1)} className="w-12 h-12 rounded-xl bg-white/5 hover:bg-primary text-gray-400 hover:text-white font-black transition flex items-center justify-center text-xl shadow-glow">+</button>
                             </div>
                         </div>
                     </div>
 
-                    {/* Resumen */}
-                    <div className="bg-card/40 border border-white/10 rounded-[2rem] p-7 space-y-5 h-fit">
+                    {/* Resumen - Visible solo en desktop (lg+) */}
+                    <div className="hidden lg:block bg-card/40 border border-white/10 rounded-[2rem] p-7 space-y-5 h-fit sticky top-6">
                         <h3 className="text-[10px] font-black text-gray-500 uppercase tracking-widest border-b border-white/5 pb-4">Resumen de Orden</h3>
                         <div className="space-y-3 text-sm">
                             <div className="flex justify-between"><span className="text-gray-500">Archivos</span><span className="font-bold text-white">{files.length} archivo{files.length !== 1 ? 's' : ''}</span></div>
@@ -543,8 +538,8 @@ export const NewOrderFlow = () => {
                             )}
                         </div>
                         <div className="flex gap-3 pt-2">
-                            <button onClick={() => setStep(2)} className="flex items-center gap-2 px-5 py-4 rounded-2xl bg-white/5 text-gray-400 font-black hover:bg-white/10 transition border border-white/5 text-sm">
-                                <ChevronLeft size={16} />
+                            <button onClick={() => setStep(2)} className="flex items-center justify-center w-14 h-14 rounded-2xl bg-white/5 text-gray-400 font-black hover:bg-white/10 transition border border-white/5">
+                                <ChevronLeft size={20} />
                             </button>
                             <button onClick={handleSubmit} disabled={isSubmitting}
                                 className="flex-1 py-4 rounded-2xl bg-primary hover:bg-primary-glow text-white font-black shadow-glow transition disabled:opacity-50 flex items-center justify-center gap-3 uppercase tracking-tighter italic text-lg">
@@ -554,6 +549,32 @@ export const NewOrderFlow = () => {
                     </div>
                 </div>
             )}
+
+            {/* STICKY BOTTOM BAR (Mobile only) */}
+            <div className="fixed bottom-0 left-0 right-0 z-50 lg:hidden px-4 pb-6 pt-4 bg-background/90 backdrop-blur-xl border-t border-white/10 animate-in slide-in-from-bottom duration-300 shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.5)]">
+                <div className="flex items-center justify-between gap-4 max-w-sm mx-auto">
+                    <div className="flex flex-col min-w-[100px]">
+                        <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest leading-none mb-1">Total Estimado</span>
+                        <div className="flex items-baseline gap-1">
+                            <span className="text-3xl font-black text-white italic leading-none">${estimatedPrice}</span>
+                            {usePack && <Zap size={10} className="text-primary" />}
+                        </div>
+                    </div>
+                    <button 
+                        onClick={step === 3 ? handleSubmit : () => setStep(prev => prev + 1)}
+                        disabled={isSubmitting || (step === 1 && files.length === 0) || (step === 2 && !selectedLocation)}
+                        className="flex-1 h-14 min-h-[56px] bg-primary hover:bg-primary-glow text-white rounded-2xl font-black shadow-glow transition flex items-center justify-center gap-2 uppercase tracking-tighter italic text-base disabled:opacity-30 active:scale-95 touch-manipulation"
+                    >
+                        {isSubmitting ? <Loader2 className="animate-spin" size={24} /> : (
+                            <>
+                                <span>{step === 3 ? 'Enviar Orden' : 'Siguiente'}</span>
+                                {step < 3 && <ChevronRight size={20} />}
+                                {step === 3 && <FileText size={20} />}
+                            </>
+                        )}
+                    </button>
+                </div>
+            </div>
         </div>
     );
 };

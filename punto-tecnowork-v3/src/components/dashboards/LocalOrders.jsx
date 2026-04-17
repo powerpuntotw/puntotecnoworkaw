@@ -13,6 +13,7 @@ export const LocalOrders = ({ locationId }) => {
     const [isUpdating, setIsUpdating] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [printWizardOrder, setPrintWizardOrder] = useState(null);
+    const [activeTab, setActiveTab] = useState('pendiente');
 
     const fetchOrders = async () => {
         if (!locationId) return;
@@ -93,10 +94,10 @@ export const LocalOrders = ({ locationId }) => {
     };
 
     const columns = [
-        { id: 'pendiente',  label: 'Cola de Espera',  color: 'border-accent',    lightColor: 'bg-accent/5'    },
-        { id: 'en_proceso', label: 'En Producción',   color: 'border-primary',   lightColor: 'bg-primary/5'   },
-        { id: 'listo',      label: 'Listo p/ Retiro', color: 'border-success',   lightColor: 'bg-success/5'   },
-        { id: 'entregado',  label: 'Historial',       color: 'border-secondary', lightColor: 'bg-secondary/5' }
+        { id: 'pendiente',  label: 'Cola de Espera',  shortLabel: 'Cola',    color: 'border-accent',    lightColor: 'bg-accent/5'    },
+        { id: 'en_proceso', label: 'En Producción',   shortLabel: 'Taller',  color: 'border-primary',   lightColor: 'bg-primary/5'   },
+        { id: 'listo',      label: 'Listo p/ Retiro', shortLabel: 'Listos',  color: 'border-success',   lightColor: 'bg-success/5'   },
+        { id: 'entregado',  label: 'Historial',       shortLabel: 'Archivo', color: 'border-secondary', lightColor: 'bg-secondary/5' }
     ];
 
     const filteredOrders = orders.filter(o =>
@@ -158,9 +159,27 @@ export const LocalOrders = ({ locationId }) => {
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 h-[calc(100vh-280px)] min-h-[500px]">
+            {/* Selector de Pestañas en Móvil */}
+            <div className="flex md:hidden bg-card/40 backdrop-blur-3xl border border-white/10 rounded-2xl p-1 gap-1 sticky top-0 z-20 shadow-xl overflow-x-auto no-scrollbar">
+                {columns.map(col => {
+                    const count = filteredOrders.filter(o => o.status === col.id).length;
+                    const isActive = activeTab === col.id;
+                    return (
+                        <button key={col.id} onClick={() => setActiveTab(col.id)}
+                            className={`flex-1 flex flex-col items-center justify-center py-2 px-3 rounded-xl transition-all duration-300 min-w-[75px] ${isActive ? 'bg-white/10 text-white border border-white/5 shadow-inner' : 'text-gray-500 hover:text-gray-300'}`}>
+                            <span className="text-[10px] font-black uppercase tracking-widest">{col.shortLabel}</span>
+                            <span className={`text-[10px] font-black mt-0.5 ${isActive ? col.color.replace('border-', 'text-') : 'text-gray-600'}`}>
+                                {count}
+                            </span>
+                            {isActive && <div className={`h-0.5 w-4 mt-1 rounded-full ${col.color.replace('border-', 'bg-')}`} />}
+                        </button>
+                    );
+                })}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 h-[calc(100vh-320px)] md:h-[calc(100vh-280px)] min-h-[500px]">
                 {columns.map(col => (
-                    <div key={col.id} className="flex flex-col bg-card/20 backdrop-blur-3xl rounded-[2rem] border border-white/5 overflow-hidden shadow-2xl">
+                    <div key={col.id} className={`flex flex-col bg-card/20 backdrop-blur-3xl rounded-[2rem] border border-white/5 overflow-hidden shadow-2xl ${activeTab !== col.id ? 'hidden md:flex' : 'flex'}`}>
                         <div className={`h-1.5 ${col.color.replace('border-', 'bg-')}`} />
                         <div className="p-4 bg-white/5 flex justify-between items-center border-b border-white/5">
                             <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">{col.label}</h3>
@@ -171,7 +190,7 @@ export const LocalOrders = ({ locationId }) => {
                         <div className="flex-1 overflow-y-auto p-3 space-y-3 custom-scrollbar">
                             {filteredOrders.filter(o => o.status === col.id).slice(0, col.id === 'entregado' ? 15 : 100).map(order => (
                                 <div key={order.$id} onClick={() => setSelectedOrder(order)}
-                                    className="group bg-dark/40 border border-white/5 p-4 rounded-2xl cursor-pointer hover:border-primary/30 transition-all shadow-lg active:scale-95">
+                                    className="group bg-dark/40 border border-white/5 p-3 sm:p-4 rounded-xl sm:rounded-2xl cursor-pointer hover:border-primary/30 transition-all shadow-lg active:scale-95">
                                     <div className="flex justify-between items-start mb-2">
                                         <span className="text-[9px] font-black text-primary font-mono bg-primary/10 px-2 py-0.5 rounded border border-primary/20 uppercase">
                                             #{order.order_number || order.$id.substring(0,6)}
@@ -202,8 +221,8 @@ export const LocalOrders = ({ locationId }) => {
 
             {/* Modal */}
             {selectedOrder && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-xl">
-                    <div className="bg-dark/80 backdrop-blur-3xl w-full max-w-lg border border-white/10 rounded-[3rem] p-8 shadow-3xl relative overflow-hidden">
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/90 backdrop-blur-xl">
+                    <div className="bg-dark/80 backdrop-blur-3xl w-full max-w-lg border border-white/10 rounded-[2.5rem] sm:rounded-[3rem] p-6 sm:p-8 shadow-3xl relative overflow-hidden max-h-[95vh] overflow-y-auto custom-scrollbar">
                         <div className="absolute top-0 right-0 w-48 h-48 bg-primary/5 rounded-full blur-[80px]" />
                         <div className="flex justify-between items-start mb-6 relative z-10">
                             <div>
