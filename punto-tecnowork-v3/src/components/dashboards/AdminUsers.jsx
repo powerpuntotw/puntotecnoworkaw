@@ -8,6 +8,7 @@ import {
     CheckCircle2, Ban, Package
 } from 'lucide-react';
 import { AccessService } from '../../services/AccessService';
+import { AuditService } from '../../lib/auditService';
 
 // ─── Helpers ────────────────────────────────────────────────
 const roleStyle = (t) => {
@@ -99,11 +100,26 @@ const UserPrintPacks = ({ userId, userName }) => {
                 import.meta.env.VITE_APPWRITE_DATABASE_ID, 'print_packs', revokingPack.$id,
                 { status: 'revocado', revoked_reason: revokeReason.trim() }
             );
+
             setPacks(prev => prev.map(p =>
                 p.$id === revokingPack.$id
                     ? { ...p, status: 'revocado', revoked_reason: revokeReason.trim() }
                     : p
             ));
+
+            await AuditService.logAction({
+                action: 'printpass_revoke',
+                entityType: 'printpass',
+                entityId: revokingPack.$id,
+                metadata: {
+                    description: `Pack revocado a ${userName}`,
+                    user_id: userId,
+                    user_name: userName,
+                    reward_name: revokingPack.reward_name,
+                    reason: revokeReason.trim()
+                }
+            });
+
             toast.success(`Pack de ${userName} revocado.`);
             setShowRevokeModal(false);
             setRevokingPack(null);
@@ -344,6 +360,20 @@ export const AdminUsers = () => {
                 import.meta.env.VITE_APPWRITE_DATABASE_ID, 'users', userId,
                 { user_type: newRole }
             );
+            
+            const oldUser = users.find(u => u.$id === userId);
+            await AuditService.logAction({
+                action: 'user_role_change',
+                entityType: 'user',
+                entityId: userId,
+                metadata: {
+                    description: `Cambio de rol para ${oldUser?.full_name || userId}`,
+                    user_name: oldUser?.full_name,
+                    old_role: oldUser?.user_type || 'client',
+                    new_role: newRole
+                }
+            });
+
             setUsers(users.map(u => u.$id === userId ? { ...u, user_type: newRole } : u));
             toast.success('Rol actualizado.');
         } catch { toast.error('Error al actualizar.'); }
@@ -368,6 +398,17 @@ export const AdminUsers = () => {
             try {
                 await databases.deleteDocument(import.meta.env.VITE_APPWRITE_DATABASE_ID, 'users', userId);
             } catch (e) { if (e.code !== 404) throw e; }
+
+            await AuditService.logAction({
+                action: 'user_delete',
+                entityType: 'user',
+                entityId: userId,
+                metadata: {
+                    description: `Usuario eliminado: ${name}`,
+                    user_email: name // El nombre suele ser el email si no hay full_name
+                }
+            });
+
             setUsers(users.filter(u => u.$id !== userId));
             toast.success('Usuario eliminado.');
         } catch (e) {

@@ -1,5 +1,5 @@
-import { databases } from './appwrite';
-import { Query } from 'appwrite';
+import { databases, account } from './appwrite';
+import { Query, ID } from 'appwrite';
 
 const DATABASE_ID = import.meta.env.VITE_APPWRITE_DATABASE_ID;
 const COLLECTION_ID = 'audit_logs';
@@ -8,6 +8,49 @@ const COLLECTION_ID = 'audit_logs';
  * Servicio para interactuar con la colección de logs de auditoría.
  */
 export const AuditService = {
+    /**
+     * Registra una acción administrativa crítica.
+     * @param {Object} params
+     * @param {string} params.action - Identificador de la acción (ej: price_update)
+     * @param {string} params.entityType - Tipo de entidad afectada (price, user, location, branding, printpass)
+     * @param {string} [params.entityId] - ID opcional del recurso afectado
+     * @param {Object} [params.metadata] - Contexto adicional y cambios
+     */
+    logAction: async ({ action, entityType, entityId = null, metadata = {} }) => {
+        try {
+            // Intentamos obtener el usuario actual para el log
+            let adminName = 'Sistema';
+            try {
+                const user = await account.get();
+                adminName = user.name || user.email;
+            } catch (e) {
+                console.warn('AuditService: could not get current user, logging as System');
+            }
+
+            const payload = {
+                v: 2, // Versión del esquema de log
+                entityType,
+                entityId,
+                metadata,
+                timestamp: new Date().toISOString()
+            };
+
+            await databases.createDocument(
+                DATABASE_ID,
+                COLLECTION_ID,
+                ID.unique(),
+                {
+                    admin_name: adminName,
+                    action: action,
+                    description: JSON.stringify(payload)
+                }
+            );
+        } catch (error) {
+            console.error('AuditService.logAction failed:', error);
+            // No lanzamos error para no romper la experiencia del usuario si falla el log
+        }
+    },
+
     /**
      * Recupera una lista de logs paginados.
      * @param {number} limit - Cantidad de registros por página.
@@ -34,7 +77,6 @@ export const AuditService = {
 
     /**
      * Búsqueda simple de logs (limitada a los más recientes para performance).
-     * Nota: En Appwrite, Query.search requiere índices adecuados.
      * @param {string} term - Término de búsqueda.
      * @param {number} limit - Límite de resultados.
      */
@@ -46,7 +88,6 @@ export const AuditService = {
                 [
                     Query.orderDesc('$createdAt'),
                     Query.limit(limit),
-                    // Nota: Se asume que admin_name o description están indexados para búsqueda
                     Query.or([
                         Query.contains('admin_name', term),
                         Query.contains('action', term),

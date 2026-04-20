@@ -2,8 +2,9 @@ import { useState, useEffect } from 'react';
 import { databases, storage } from '../../lib/appwrite';
 import { ID } from 'appwrite';
 import toast from 'react-hot-toast';
-import { Palette, Upload, Trash2, Save, Loader2, Image as ImageIcon, RotateCcw, Sparkles } from 'lucide-react';
+import { Palette, Save, RefreshCw, Loader2, Upload, Trash2, Sparkles, Image as ImageIcon, RotateCcw } from 'lucide-react';
 import { useBranding } from '../../context/BrandingContext';
+import { AuditService } from '../../lib/auditService';
 
 export const AdminBranding = () => {
     const { refreshBranding } = useBranding();
@@ -66,6 +67,15 @@ export const AdminBranding = () => {
             // Actualización reactiva instantánea
             if (refreshBranding) await refreshBranding();
             
+            await AuditService.logAction({
+                action: 'branding_update',
+                entityType: 'branding',
+                metadata: { 
+                    description: `Actualizó configuración de branding: ${config.platformName}`,
+                    platformName: config.platformName
+                }
+            });
+
             toast.success("Branding actualizado correctamente");
         } catch (error) {
             console.error("Save branding error:", error);
@@ -94,16 +104,37 @@ export const AdminBranding = () => {
         }
     };
 
-    const resetColors = () => {
-        setConfig({
+    const resetColors = async () => {
+        if (!window.confirm("¿Restaurar colores originales de Punto Tecnowork?")) return;
+        
+        const defaultConfig = {
             ...config,
             colors: {
                 primary: '#EB1C24',
                 secondary: '#0093D8',
                 accent: '#FFC905'
             }
-        });
-        toast.success("Colores restaurados por defecto");
+        };
+        
+        setConfig(defaultConfig);
+        
+        try {
+            const dbId = import.meta.env.VITE_APPWRITE_DATABASE_ID;
+            if (docId) {
+                await databases.updateDocument(dbId, 'system_config', docId, { data: JSON.stringify(defaultConfig) });
+                
+                await AuditService.logAction({
+                    action: 'branding_reset',
+                    entityType: 'branding',
+                    metadata: { description: "Restauró la paleta de colores por defecto" }
+                });
+
+                if (refreshBranding) await refreshBranding();
+                toast.success("Colores restaurados y guardados");
+            }
+        } catch (error) {
+            toast.error("Error al guardar reset de colores");
+        }
     };
 
     if (loading) return <div className="flex justify-center items-center py-20"><Loader2 className="animate-spin text-primary" /></div>;

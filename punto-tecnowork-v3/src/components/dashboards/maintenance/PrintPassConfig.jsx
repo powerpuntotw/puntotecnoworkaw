@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import { databases } from '../../../lib/appwrite';
-import { ID, Query } from 'appwrite';
+import { Query, ID } from 'appwrite';
 import toast from 'react-hot-toast';
 import {
-    Printer, Save, Loader2, CheckCircle2, ToggleLeft, ToggleRight,
-    ShieldCheck, ChevronDown, ChevronUp
+    ShieldCheck, ChevronDown, ChevronUp, Printer, 
+    Loader2, ToggleRight, ToggleLeft, CheckCircle2, Save
 } from 'lucide-react';
+import { AuditService } from '../../../lib/auditService';
 
 const POLICY_DEFAULT = `POLÍTICA DE USO — PrintPass™
 
@@ -41,6 +42,7 @@ export const PrintPassConfig = ({ onStatusChange }) => {
     const [ppSaving, setPpSaving] = useState(false);
     const [ppLoading, setPpLoading] = useState(true);
     const [ppOpen, setPpOpen] = useState(true);
+    const [initialEnabled, setInitialEnabled] = useState(false);
 
     const fetchPrintPass = async () => {
         try {
@@ -60,6 +62,7 @@ export const PrintPassConfig = ({ onStatusChange }) => {
                 const data = JSON.parse(doc.data);
                 setPpDocId(doc.$id);
                 setPpEnabled(data.enabled ?? false);
+                setInitialEnabled(data.enabled ?? false);
                 setPpEnabledLocs(data.enabled_locations ?? []);
                 setPpPolicy(data.policy ?? POLICY_DEFAULT);
                 onStatusChange?.(true, data.enabled, (data.enabled_locations ?? []).length);
@@ -99,6 +102,21 @@ export const PrintPassConfig = ({ onStatusChange }) => {
                 });
                 setPpDocId(doc.$id);
             }
+
+            const toggleChanged = ppEnabled !== initialEnabled;
+            await AuditService.logAction({
+                action: toggleChanged ? 'printpass_toggle' : 'printpass_config_update',
+                entityType: 'printpass',
+                metadata: { 
+                    description: toggleChanged 
+                        ? `Módulo PrintPass™ ${ppEnabled ? 'activado' : 'desactivado'} globalmente`
+                        : `Actualizó configuración de PrintPass™ (${ppEnabledLocs.length} locales)`,
+                    enabled: ppEnabled,
+                    enabled_locations_count: ppEnabledLocs.length
+                }
+            });
+
+            setInitialEnabled(ppEnabled);
             onStatusChange?.(true, ppEnabled, ppEnabledLocs.length);
             toast.success('Configuración PrintPass™ guardada');
         } catch {

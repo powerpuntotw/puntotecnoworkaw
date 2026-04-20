@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { databases } from '../../../lib/appwrite';
-import { ID, Query } from 'appwrite';
+import { Query } from 'appwrite';
 import toast from 'react-hot-toast';
 import { Settings, Save, TrendingUp, Loader2 } from 'lucide-react';
+import { AuditService } from '../../../lib/auditService';
 
 const PRICE_LIST = [
     { id: 'a4_bn',        label: 'A4 B&N (Eco)' },
@@ -20,6 +21,7 @@ export const PriceManager = ({ onStatusChange }) => {
     const [loading, setLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
     const [configDocId, setConfigDocId] = useState(null);
+    const [lastActionWasSimulation, setLastActionWasSimulation] = useState(false);
 
     const fetchPrices = async () => {
         try {
@@ -53,12 +55,21 @@ export const PriceManager = ({ onStatusChange }) => {
             const priceData = prices.reduce((acc, p) => ({ ...acc, [p.id]: p.price }), {});
             if (configDocId) {
                 await databases.updateDocument(dbId, 'system_config', configDocId, { data: JSON.stringify(priceData) });
-            } else {
-                const doc = await databases.createDocument(dbId, 'system_config', ID.unique(), {
-                    type: 'global_prices', data: JSON.stringify(priceData)
-                });
-                setConfigDocId(doc.$id);
             }
+            
+            const action = lastActionWasSimulation ? 'price_bulk_update' : 'price_update';
+            await AuditService.logAction({
+                action,
+                entityType: 'price',
+                metadata: { 
+                    description: lastActionWasSimulation 
+                        ? 'Actualización masiva de precios (inflación)' 
+                        : 'Actualización manual de precios globales',
+                    prices: priceData
+                }
+            });
+
+            setLastActionWasSimulation(false);
             onStatusChange?.(true);
             toast.success('Precios globales actualizados');
         } catch { 
@@ -79,6 +90,7 @@ export const PriceManager = ({ onStatusChange }) => {
         setPrices(simulatedPrices.map(p => ({ ...p, price: p.newPrice })));
         setSimulatedPrices(null);
         setInflation('');
+        setLastActionWasSimulation(true);
         toast.success('Ajuste aplicado. Guardá para confirmar.');
     };
 
