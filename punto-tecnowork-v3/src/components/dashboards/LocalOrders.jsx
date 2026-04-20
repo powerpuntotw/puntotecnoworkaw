@@ -2,8 +2,10 @@ import { useState, useEffect } from 'react';
 import { databases } from '../../lib/appwrite';
 import { Query, ID } from 'appwrite';
 import { calcPointsToEarn } from '../../lib/constants';
+import { COLOR_TO_PACK } from '../../services/PriceService';
+import { AuditService } from '../../lib/auditService';
 import toast from 'react-hot-toast';
-import { Loader2, CheckCircle, Search, Package, FileText, Maximize, Palette, Printer } from 'lucide-react';
+import { Loader2, CheckCircle, Search, Package, FileText, Maximize, Palette, Printer, XCircle, AlertTriangle } from 'lucide-react';
 import { PrintWizard } from './PrintWizard';
 
 export const LocalOrders = ({ locationId }) => {
@@ -11,6 +13,8 @@ export const LocalOrders = ({ locationId }) => {
     const [loading, setLoading] = useState(true);
     const [selectedOrder, setSelectedOrder] = useState(null);
     const [isUpdating, setIsUpdating] = useState(false);
+    const [isCancelling, setIsCancelling] = useState(false);
+    const [cancelConfirm, setCancelConfirm] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [printWizardOrder, setPrintWizardOrder] = useState(null);
     const [activeTab, setActiveTab] = useState('pendiente');
@@ -93,11 +97,175 @@ export const LocalOrders = ({ locationId }) => {
         }
     };
 
+    const updateCopies = async (orderId, newCopies) => {
+        try {
+            setIsUpdating(true);
+            const dbId = import.meta.env.VITE_APPWRITE_DATABASE_ID;
+            const order = orders.find(o => o.$id === orderId);
+            
+            if (!order || order.pack_id) {
+                toast.error("No se pueden editar órdenes con PrintPass.");
+                setIsUpdating(false);
+                return;
+            }
+            if (newCopies < 1) newCopies = 1;
+            
+            const numFiles = Array.isArray(order.files) ? order.files.length : 1;
+            const newTotalUnits = numFiles * newCopies;
+            const newTotalPrice = newTotalUnits * (order.unit_price || 0);
+            const newPointsEarned = calcPointsToEarn(newTotalPrice);
+            
+            await databases.updateDocument(dbId, 'orders', orderId, {
+                copies: newCopies,
+                total_price: newTotalPrice,
+                points_earned: newPointsEarned
+            });
+            
+            const updatedOrder = { 
+                ...order, 
+                copies: newCopies, 
+                total_price: newTotalPrice, 
+                points_earned: newPointsEarned 
+            };
+            
+            setOrders(orders.map(o => o.$id === orderId ? updatedOrder : o));
+            
+            if (selectedOrder && selectedOrder.$id === orderId) {
+                setSelectedOrder(updatedOrder);
+            }
+            
+            toast.success('Cantidad actualizada', {
+                style: { background: '#1a1a1a', color: '#fff', borderRadius: '15px' }
+            });
+        } catch (err) {
+            console.error('Error updating copies:', err);
+            toast.error("Error al recalcular pedido");
+        } finally {
+            setIsUpdating(false);
+        }
+    };
+
+    // ── cancelOrder ───────────────────────────────────────────────────
+    // Flujo idempotente de cancelación. Orden de operaciones aprobado:
+    //  1. Validar estado permitido (pendiente | en_proceso)
+    //  2. Validar refund_applied === false (guard anti-doble-refund)
+    //  3. Marcar orden como 'cancelado' (bloquea re-intentos concurrentes)
+    //  4. Si hay pack_id → reintegrar saldo al PrintPass
+    //  5. Solo si el refund fue exitoso → marcar refund_applied = true
+    //  6. Registrar en auditoría
+    //  7. Actualizar estado local
+    const cancelOrder = async (order) => {
+        if (isCancelling) return; // guard doble click
+
+        const ALLOWED_STATES = ['pendiente', 'en_proceso'];
+        if (!ALLOWED_STATES.includes(order.status)) {
+            toast.error('Este pedido no puede cancelarse en su estado actual.');
+            return;
+        }
+
+        if (order.refund_applied === true) {
+            toast.error('El reintegro ya fue aplicado. No se puede cancelar de nuevo.');
+            return;
+        }
+
+        setIsCancelling(true);
+        const dbId = import.meta.env.VITE_APPWRITE_DATABASE_ID;
+
+        try {
+            // ── PASO 3: Marcar como cancelado ──────────────────────────
+            await databases.updateDocument(dbId, 'orders', order.$id, {
+                status: 'cancelado'
+            });
+
+            let refundOk = false;
+
+            // ── PASO 4: Reintegro de PrintPass si corresponde ──────────
+            if (order.pack_id && order.pack_units_used > 0) {
+                try {
+                    const packDoc = await databases.getDocument(dbId, 'print_packs', order.pack_id);
+
+                    // Determinar el campo de saldo según color_mode
+                    const packField = COLOR_TO_PACK[order.color_mode];
+                    if (packDoc && packField) {
+                        const currentBalance = packDoc[packField] ?? 0;
+                        const restoredBalance = currentBalance + (order.pack_units_used || 0);
+                        const updatePayload = { [packField]: restoredBalance };
+
+                        // Si el pack estaba agotado, reactivarlo
+                        if (packDoc.status === 'agotado') {
+                            updatePayload.status = 'activo';
+                        }
+
+                        await databases.updateDocument(dbId, 'print_packs', order.pack_id, updatePayload);
+                        refundOk = true;
+                    } else {
+                        console.warn('cancelOrder: pack_field no encontrado para color_mode', order.color_mode);
+                        refundOk = false;
+                    }
+                } catch (refundErr) {
+                    console.error('cancelOrder: error al reintegrar PrintPass:', refundErr);
+                    // La orden ya quedó cancelada; loguear pero no bloquear
+                    refundOk = false;
+                    toast.error('Pedido cancelado, pero el reintegro del PrintPass falló. Informá al administrador.');
+                }
+            } else {
+                // Sin PrintPass: no hay refund que aplicar
+                refundOk = true;
+            }
+
+            // ── PASO 5: Marcar refund_applied solo si el refund fue exitoso ──
+            if (refundOk && order.pack_id) {
+                try {
+                    await databases.updateDocument(dbId, 'orders', order.$id, {
+                        refund_applied: true
+                    });
+                } catch (flagErr) {
+                    console.error('cancelOrder: no se pudo marcar refund_applied:', flagErr);
+                }
+            }
+
+            // ── PASO 6: Auditoría ─────────────────────────────────────
+            await AuditService.logAction({
+                action: 'order_cancelled',
+                entityType: 'order',
+                entityId: order.$id,
+                metadata: {
+                    order_number: order.order_number || order.$id.substring(0, 8).toUpperCase(),
+                    client_name: order.client_name,
+                    prev_status: order.status,
+                    had_pack: !!order.pack_id,
+                    pack_id: order.pack_id || null,
+                    refund_applied: refundOk && !!order.pack_id,
+                    pack_units_returned: order.pack_id ? (order.pack_units_used || 0) : 0
+                }
+            });
+
+            // ── PASO 7: Actualizar estado local ───────────────────────
+            const updatedOrder = { ...order, status: 'cancelado', refund_applied: refundOk && !!order.pack_id };
+            setOrders(prev => prev.map(o => o.$id === order.$id ? updatedOrder : o));
+            setSelectedOrder(null);
+            setCancelConfirm(false);
+
+            toast.success(
+                order.pack_id && refundOk
+                    ? 'Pedido cancelado. PrintPass reintegrado.'
+                    : 'Pedido cancelado.',
+                { style: { background: '#1a1a1a', color: '#fff', borderRadius: '15px' } }
+            );
+        } catch (err) {
+            console.error('cancelOrder error:', err);
+            toast.error('Error al cancelar el pedido. Intentá de nuevo.');
+        } finally {
+            setIsCancelling(false);
+        }
+    };
+
     const columns = [
-        { id: 'pendiente',  label: 'Cola de Espera',  shortLabel: 'Cola',    color: 'border-accent',    lightColor: 'bg-accent/5'    },
-        { id: 'en_proceso', label: 'En Producción',   shortLabel: 'Taller',  color: 'border-primary',   lightColor: 'bg-primary/5'   },
-        { id: 'listo',      label: 'Listo p/ Retiro', shortLabel: 'Listos',  color: 'border-success',   lightColor: 'bg-success/5'   },
-        { id: 'entregado',  label: 'Historial',       shortLabel: 'Archivo', color: 'border-secondary', lightColor: 'bg-secondary/5' }
+        { id: 'pendiente',  label: 'Cola de Espera',  shortLabel: 'Cola',      color: 'border-accent',    lightColor: 'bg-accent/5'    },
+        { id: 'en_proceso', label: 'En Producción',   shortLabel: 'Taller',    color: 'border-primary',   lightColor: 'bg-primary/5'   },
+        { id: 'listo',      label: 'Listo p/ Retiro', shortLabel: 'Listos',    color: 'border-success',   lightColor: 'bg-success/5'   },
+        { id: 'entregado',  label: 'Historial',       shortLabel: 'Archivo',   color: 'border-secondary', lightColor: 'bg-secondary/5' },
+        { id: 'cancelado',  label: 'Cancelados',      shortLabel: 'Cancelado', color: 'border-red-500',   lightColor: 'bg-red-500/5'   },
     ];
 
     const filteredOrders = orders.filter(o =>
@@ -177,7 +345,7 @@ export const LocalOrders = ({ locationId }) => {
                 })}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 h-[calc(100vh-320px)] md:h-[calc(100vh-280px)] min-h-[500px]">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-5 h-[calc(100vh-320px)] md:h-[calc(100vh-280px)] min-h-[500px]">
                 {columns.map(col => (
                     <div key={col.id} className={`flex flex-col bg-card/20 backdrop-blur-3xl rounded-[2rem] border border-white/5 overflow-hidden shadow-2xl ${activeTab !== col.id ? 'hidden md:flex' : 'flex'}`}>
                         <div className={`h-1.5 ${col.color.replace('border-', 'bg-')}`} />
@@ -188,7 +356,7 @@ export const LocalOrders = ({ locationId }) => {
                             </span>
                         </div>
                         <div className="flex-1 overflow-y-auto p-3 space-y-3 custom-scrollbar">
-                            {filteredOrders.filter(o => o.status === col.id).slice(0, col.id === 'entregado' ? 15 : 100).map(order => (
+                            {filteredOrders.filter(o => o.status === col.id).slice(0, (col.id === 'entregado' || col.id === 'cancelado') ? 15 : 100).map(order => (
                                 <div key={order.$id} onClick={() => setSelectedOrder(order)}
                                     className="group bg-dark/40 border border-white/5 p-3 sm:p-4 rounded-xl sm:rounded-2xl cursor-pointer hover:border-primary/30 transition-all shadow-lg active:scale-95">
                                     <div className="flex justify-between items-start mb-2">
@@ -231,7 +399,7 @@ export const LocalOrders = ({ locationId }) => {
                                     #{selectedOrder.order_number || selectedOrder.$id.substring(0,8).toUpperCase()}
                                 </p>
                             </div>
-                            <button onClick={() => setSelectedOrder(null)} className="p-3 bg-white/5 rounded-2xl border border-white/5 text-gray-500 hover:text-white transition">✕</button>
+                            <button onClick={() => { setSelectedOrder(null); setCancelConfirm(false); }} className="p-3 bg-white/5 rounded-2xl border border-white/5 text-gray-500 hover:text-white transition">✕</button>
                         </div>
                         <div className="space-y-5 relative z-10">
                             <div className="grid grid-cols-2 gap-3">
@@ -259,9 +427,25 @@ export const LocalOrders = ({ locationId }) => {
                                 </div>
                                 <div className="flex flex-col items-center gap-2">
                                     <div className="w-8 h-8 rounded-xl bg-white/5 flex items-center justify-center"><Package size={14} className="text-accent" /></div>
-                                    <span className="text-[9px] font-bold text-gray-400 uppercase text-center">{selectedOrder.copies} cop.</span>
+                                    {selectedOrder.status === 'pendiente' && !selectedOrder.pack_id ? (
+                                        <div className="flex items-center gap-2 bg-dark/50 px-2 py-1 rounded-lg border border-white/10 mt-1 shadow-inner">
+                                            <button onClick={() => updateCopies(selectedOrder.$id, selectedOrder.copies - 1)} disabled={selectedOrder.copies <= 1 || isUpdating}
+                                                className="w-5 h-5 flex items-center justify-center bg-white/5 hover:bg-white/10 rounded text-gray-400 hover:text-white transition cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed">-</button>
+                                            <span className="text-[10px] font-black text-white w-4 text-center">{selectedOrder.copies}</span>
+                                            <button onClick={() => updateCopies(selectedOrder.$id, selectedOrder.copies + 1)} disabled={isUpdating}
+                                                className="w-5 h-5 flex items-center justify-center bg-white/5 hover:bg-white/10 rounded text-gray-400 hover:text-white transition cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed">+</button>
+                                        </div>
+                                    ) : (
+                                        <span className="text-[9px] font-bold text-gray-400 uppercase text-center mt-2">{selectedOrder.copies} cop.</span>
+                                    )}
                                 </div>
                             </div>
+                            
+                            {selectedOrder.pack_id && selectedOrder.status === 'pendiente' && (
+                                <div className="flex items-center gap-2 px-4 py-2.5 bg-accent/10 border border-accent/20 rounded-xl text-accent text-[10px] font-black uppercase tracking-widest mt-2">
+                                    ★ Orden con PrintPass: no admite edición. Cancele para modificar.
+                                </div>
+                            )}
 
                             {/* Badge de estado de impresión en el modal */}
                             {selectedOrder.status === 'en_proceso' && selectedOrder.print_status === 'printing' && (
@@ -289,22 +473,77 @@ export const LocalOrders = ({ locationId }) => {
                                     </button>
                                 )}
                                 {selectedOrder.status === 'en_proceso' && (
-                                    selectedOrder.print_status === 'printing' ? (
-                                        <div className="w-full bg-yellow-400/10 border border-yellow-400/20 text-yellow-400 font-black py-4 rounded-2xl flex items-center justify-center gap-3 text-sm animate-pulse">
-                                            <Loader2 size={18} className="animate-spin" /> Imprimiendo, aguardá...
+                                    <>
+                                        {selectedOrder.print_status === 'printing' && (
+                                            <div className="w-full bg-yellow-400/10 border border-yellow-400/20 text-yellow-400 font-black py-3 mb-2 rounded-xl flex items-center justify-center gap-2 text-xs">
+                                                <Loader2 size={14} className="animate-spin" /> Agente reporta impresión en curso
+                                            </div>
+                                        )}
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <button onClick={() => updateStatus(selectedOrder.$id, 'pendiente')} disabled={isUpdating}
+                                                className="w-full bg-white/5 hover:bg-white/10 text-white font-black py-3.5 rounded-2xl flex flex-col items-center justify-center gap-1 transition text-sm">
+                                                <span className="text-[10px] text-gray-400 uppercase tracking-widest leading-none">Volver a</span>
+                                                <span className="text-sm italic tracking-tighter">COLA</span>
+                                            </button>
+                                            <button onClick={() => updateStatus(selectedOrder.$id, 'listo')} disabled={isUpdating}
+                                                className="w-full bg-success hover:bg-success/80 text-white font-black py-3.5 rounded-2xl flex flex-col items-center justify-center gap-1 transition shadow-lg">
+                                                <span className="text-[10px] text-success/50 uppercase tracking-widest leading-none">Terminar</span>
+                                                <span className="text-sm italic tracking-tighter flex items-center gap-2">
+                                                    <CheckCircle size={14} /> FORZAR LISTO
+                                                </span>
+                                            </button>
                                         </div>
-                                    ) : (
-                                        <button onClick={() => updateStatus(selectedOrder.$id, 'listo')} disabled={isUpdating}
-                                            className="w-full bg-success hover:bg-success/80 text-white font-black py-4 rounded-2xl flex items-center justify-center gap-3 transition text-lg italic tracking-tighter">
-                                            <CheckCircle size={20} /> MARCAR COMO LISTO
-                                        </button>
-                                    )
+                                    </>
                                 )}
                                 {selectedOrder.status === 'listo' && (
                                     <button onClick={() => updateStatus(selectedOrder.$id, 'entregado')} disabled={isUpdating}
                                         className="w-full bg-secondary hover:bg-secondary/80 text-white font-black py-4 rounded-2xl flex items-center justify-center gap-3 transition text-lg italic tracking-tighter">
                                         <Package size={20} /> CONFIRMAR ENTREGA
                                     </button>
+                                )}
+
+                                {/* ── Cancelación operativa ── */}
+                                {['pendiente', 'en_proceso'].includes(selectedOrder.status) && (
+                                    <div className="border-t border-white/5 pt-3 mt-1">
+                                        {!cancelConfirm ? (
+                                            <button
+                                                onClick={() => setCancelConfirm(true)}
+                                                disabled={isUpdating || isCancelling}
+                                                className="w-full bg-transparent hover:bg-red-500/10 border border-red-500/20 hover:border-red-500/40 text-red-400 font-black py-3 rounded-2xl flex items-center justify-center gap-2 transition text-sm tracking-widest uppercase">
+                                                <XCircle size={16} /> Cancelar Pedido
+                                            </button>
+                                        ) : (
+                                            <div className="bg-red-500/10 border border-red-500/30 rounded-2xl p-4 space-y-3">
+                                                <div className="flex items-start gap-2">
+                                                    <AlertTriangle size={16} className="text-red-400 mt-0.5 shrink-0" />
+                                                    <div>
+                                                        <p className="text-red-400 font-black text-xs uppercase tracking-widest">¿Confirmar cancelación?</p>
+                                                        <p className="text-gray-400 text-[10px] mt-1 leading-relaxed">
+                                                            {selectedOrder.pack_id
+                                                                ? 'Se cancelará el pedido y se reintegrará el saldo del PrintPass.'
+                                                                : 'Se cancelará el pedido. Esta acción queda registrada.'}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    <button
+                                                        onClick={() => setCancelConfirm(false)}
+                                                        disabled={isCancelling}
+                                                        className="w-full bg-white/5 hover:bg-white/10 text-gray-400 font-black py-2.5 rounded-xl text-xs uppercase tracking-widest transition">
+                                                        No, volver
+                                                    </button>
+                                                    <button
+                                                        onClick={() => cancelOrder(selectedOrder)}
+                                                        disabled={isCancelling}
+                                                        className="w-full bg-red-500 hover:bg-red-600 text-white font-black py-2.5 rounded-xl text-xs uppercase tracking-widest transition flex items-center justify-center gap-2">
+                                                        {isCancelling
+                                                            ? <><Loader2 size={12} className="animate-spin" /> Cancelando...</>
+                                                            : <><XCircle size={12} /> Sí, cancelar</>}
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
                                 )}
                             </div>
                         </div>
